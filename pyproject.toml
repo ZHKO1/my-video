@@ -1,0 +1,15 @@
+[project]
+name = "my-video"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+my-video = "my_video.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
