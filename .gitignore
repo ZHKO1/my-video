@@ -46,4 +46,4 @@ docs/.vitepress/dist/
 # Claude Code
 .claude/
 CLAUDE.md
-videocaptioner/_version.py
+my_video/_version.py
