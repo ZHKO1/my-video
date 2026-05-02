@@ -1,0 +1,7 @@
+[download.yt-dlp.common]
+output_dir = "~/work/my-video"
+extra_args = [
+  "--cookies", "./cookies.txt",
+  "--proxy", "socks5://192.168.3.6:2222/",
+  "--remote-components", "ejs:github",
+]
