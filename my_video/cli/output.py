@@ -25,7 +25,6 @@ def hint(msg: str) -> None:
     """Print a hint message (e.g. how to fix a config issue)."""
     print(f"  {msg}", file=sys.stderr)
 
-
 class ProgressLine:
     """Simple single-line progress indicator for CLI."""
 

@@ -5,65 +5,9 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
-import tomllib
-
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
-
-
-def _resolve_yt_dlp_config_path(args: Namespace) -> Path:
-    config_path = getattr(args, "config", None)
-    if config_path:
-        return Path(config_path)
-    return Path("my_video.toml")
-
-
-def _load_common_config(args: Namespace) -> tuple[list[str], str | None]:
-    config_path = _resolve_yt_dlp_config_path(args)
-    if not config_path.exists():
-        return [], None
-
-    try:
-        with config_path.open("rb") as f:
-            data = tomllib.load(f)
-    except tomllib.TOMLDecodeError as e:
-        raise ValueError(f"Invalid TOML in config file {config_path}: {e}") from e
-
-    download_config = data.get("download")
-    if download_config is None:
-        return [], None
-    if not isinstance(download_config, dict):
-        raise ValueError(f"Invalid [download] section in config file {config_path}: expected table")
-
-    yt_dlp_config = download_config.get("yt-dlp")
-    if yt_dlp_config is None:
-        return [], None
-    if not isinstance(yt_dlp_config, dict):
-        raise ValueError(
-            f"Invalid [download.yt-dlp] section in config file {config_path}: expected table"
-        )
-
-    common_config = yt_dlp_config.get("common")
-    if common_config is None:
-        return [], None
-    if not isinstance(common_config, dict):
-        raise ValueError(
-            f"Invalid [download.yt-dlp.common] section in config file {config_path}: expected table"
-        )
-
-    extra_args = common_config.get("extra_args", [])
-    if not isinstance(extra_args, list) or any(not isinstance(item, str) for item in extra_args):
-        raise ValueError(
-            f"Invalid [download.yt-dlp.common].extra_args in config file {config_path}: expected string array"
-        )
-
-    output_dir = common_config.get("output_dir")
-    if output_dir is not None and not isinstance(output_dir, str):
-        raise ValueError(
-            f"Invalid [download.yt-dlp.common].output_dir in config file {config_path}: expected string"
-        )
-
-    return extra_args, str(Path(output_dir).expanduser()) if output_dir else None
+from my_video.cli.config import get_toml_str_list, get_work_dir, load_toml_config
 
 
 def run(args: Namespace, _config: dict) -> int:
@@ -78,8 +22,14 @@ def run(args: Namespace, _config: dict) -> int:
     try:
         import subprocess
 
-        extra_args, configured_output_dir = _load_common_config(args)
-        out_dir = getattr(args, "output", None) or configured_output_dir or "."
+        config_data, _ = load_toml_config()
+        if config_data is None:
+            extra_args = []
+            configured_work_dir = None
+        else:
+            extra_args = get_toml_str_list(config_data, "download.yt-dlp.common.extra_args", default=[])
+            configured_work_dir = get_work_dir(config_data)
+        out_dir = configured_work_dir or "."
 
         Path(out_dir).mkdir(parents=True, exist_ok=True)
 
@@ -99,6 +49,7 @@ def run(args: Namespace, _config: dict) -> int:
         video_result = _run_command(
             [
                 *base_cmd,
+                "--write-thumbnail",
                 "--print", "after_move:filepath",
                 "-f", "bestvideo+bestaudio/best",
                 "-o", f"{out_dir}/%(title)s.%(ext)s",

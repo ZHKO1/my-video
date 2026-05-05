@@ -18,10 +18,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from my_video.cli import exit_codes as EXIT
+from my_video.cli.config import load_toml_config
 
 def _add_common_options(parser: argparse.ArgumentParser) -> None:
     """Add options common to all commands."""
-    parser.add_argument("--config", metavar="FILE", help="Path to config file")
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     verbosity.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (only output result path)")
@@ -34,8 +34,19 @@ def _build_download_parser(subparsers) -> None:
     )
     p.add_argument("url", help="Video URL")
     _add_common_options(p)
-    p.add_argument("-o", "--output", metavar="DIR", help="Output directory (default: current directory)")
     p.set_defaults(func=_run_download)
+
+def _build_transcribe_parser(subparsers) -> None:
+    p = subparsers.add_parser(
+        "transcribe",
+        help="Transcribe audio/video to subtitles",
+        description="Convert audio or video files to subtitle files using ASR (Automatic Speech Recognition).",
+    )
+    p.add_argument("input", help="Audio or video file path")
+    _add_common_options(p)
+
+    p.set_defaults(func=_run_transcribe)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -49,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", metavar="command")
 
     _build_download_parser(subparsers)
+    _build_transcribe_parser(subparsers)
 
     return parser
 
@@ -62,16 +74,18 @@ def _get_version() -> str:
 
 def _run_download(args: argparse.Namespace) -> int:
     from my_video.cli.commands.download import run
-    config = _load_config(args)
+    config = _load_config()
     return run(args, config)
 
-def _load_config(args: argparse.Namespace) -> dict:
-    config_path = getattr(args, "config", None)
-    if config_path:
-        import json
-        with open(config_path) as f:
-            return json.load(f)
-    return {}
+def _run_transcribe(args: argparse.Namespace) -> int:
+    from my_video.cli.commands.transcribe import run
+    config = _load_config()
+    return run(args, config)
+
+
+def _load_config() -> dict:
+    config, _ = load_toml_config()
+    return config or {}
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()

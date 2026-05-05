@@ -47,3 +47,4 @@ docs/.vitepress/dist/
 .claude/
 CLAUDE.md
 my_video/_version.py
+models-*/

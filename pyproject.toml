@@ -1,8 +1,13 @@
 [project]
 name = "my-video"
 version = "0.1.0"
-requires-python = ">=3.14"
+requires-python = ">=3.13,<3.14"
 dependencies = [
+    'audioop-lts; python_version >= "3.13"',
+    "openpyxl>=3.1.5",
+    "pandas>=2.2.3",
+    "pydub>=0.25.1",
+    "whisperx>=3.8.5",
     "yt-dlp[default]>=2025.7.21",
 ]
 
