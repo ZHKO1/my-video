@@ -18,8 +18,10 @@ model_dir = ""
 [subtitle]
 target_language = "zh"
 split_by_meaning = true
+generate_summary = true
 max_split_length = 20
 max_workers = 4
+summary_length = 8000
 
 [subtitle.translate.api]
 key = "sk-e4b3998282714334a6d486f8781bec72"

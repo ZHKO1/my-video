@@ -1,13 +1,19 @@
 """subtitle command — lightweight placeholder for subtitle processing."""
 
 import concurrent.futures
+import json
 import math
 from argparse import Namespace
 from difflib import SequenceMatcher
+from pathlib import Path
+
+import pandas as pd
 
 from my_video.cli import output
 from my_video.cli import exit_codes as EXIT
 from my_video.cli.config import get_toml_value, get_work_dir
+from my_video.core.prompts import get_split_prompt, get_summary_prompt
+from my_video.core.spacy_utils.load_nlp_model import resolve_spacy_language
 from my_video.core.spacy_utils import (
     init_nlp,
     split_by_comma_main,
@@ -15,9 +21,7 @@ from my_video.core.spacy_utils import (
     split_long_by_root_main,
     split_sentences_main,
 )
-from my_video.core.prompts import get_split_prompt
-from my_video.core.spacy_utils.load_nlp_model import resolve_spacy_language
-from my_video.core.utils import check_file_exists, get_joiner
+from my_video.core.utils import ask_gpt, check_file_exists, get_joiner
 from my_video.core.utils.models import OutputPaths, build_output_paths
 
 
@@ -69,13 +73,6 @@ def find_split_positions(original, modified):
 
 def split_sentence(sentence, num_parts, word_limit=20, index=-1, retry_attempt=0):
     """Split a long sentence using GPT and return the result as a string."""
-    try:
-        from my_video.core.utils.ask_gpt import ask_gpt
-    except ImportError as e:
-        raise RuntimeError(
-            "Split-by-meaning requires GPT prompt/config utilities that are not available yet."
-        ) from e
-
     split_prompt = get_split_prompt(sentence, num_parts, word_limit)
 
     def valid_split(response_data):
@@ -169,6 +166,91 @@ def split_sentences_by_meaning(paths: OutputPaths, config: dict):
         f.write("\n".join(sentences))
     output.success("All sentences have been successfully split")
 
+CUSTOM_TERMS_PATH = Path("custom_terms.xlsx")
+
+
+def _get_summary_length(config: dict) -> int:
+    value = get_toml_value(config, "subtitle.summary_length", 8000)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 8000
+
+
+def combine_chunks(paths: OutputPaths, config: dict) -> str:
+    """Combine the text chunks identified by whisper into a single long text"""
+    with paths.split_by_meaning.open("r", encoding="utf-8") as file:
+        sentences = file.readlines()
+    cleaned_sentences = [line.strip() for line in sentences]
+    combined_text = " ".join(cleaned_sentences)
+    return combined_text[: _get_summary_length(config)]
+
+
+def search_things_to_note_in_prompt(paths: OutputPaths, sentence: str):
+    """Search for terms to note in the given sentence"""
+    with paths.terminology.open("r", encoding="utf-8") as file:
+        things_to_note = json.load(file)
+    things_to_note_list = [term["src"] for term in things_to_note["terms"] if term["src"].lower() in sentence.lower()]
+    if things_to_note_list:
+        prompt = "\n".join(
+            f'{i+1}. "{term["src"]}": "{term["tgt"]}",'
+            f' meaning: {term["note"]}'
+            for i, term in enumerate(things_to_note["terms"])
+            if term["src"] in things_to_note_list
+        )
+        return prompt
+    return None
+
+
+def _load_custom_terms() -> tuple[pd.DataFrame | None, dict]:
+    if not CUSTOM_TERMS_PATH.exists():
+        return None, {"terms": []}
+
+    custom_terms = pd.read_excel(CUSTOM_TERMS_PATH)
+    custom_terms_json = {
+        "terms": [
+            {
+                "src": str(row.iloc[0]),
+                "tgt": str(row.iloc[1]),
+                "note": str(row.iloc[2]),
+            }
+            for _, row in custom_terms.iterrows()
+        ]
+    }
+    return custom_terms, custom_terms_json
+
+
+@check_file_exists(lambda paths, *_args, **_kwargs: paths.terminology)
+def get_summary(paths: OutputPaths, config: dict):
+    """Summarize split subtitles and extract terminology."""
+    src_content = combine_chunks(paths, config)
+    custom_terms, custom_terms_json = _load_custom_terms()
+
+    if custom_terms is not None and len(custom_terms) > 0:
+        output.info(f"Custom terms loaded: {len(custom_terms)} terms")
+
+    summary_prompt = get_summary_prompt(src_content, custom_terms_json)
+    output.info("Summarizing and extracting terminology")
+
+    def valid_summary(response_data):
+        required_keys = {"src", "tgt", "note"}
+        if "terms" not in response_data:
+            return {"status": "error", "message": "Invalid response format"}
+        for term in response_data["terms"]:
+            if not all(key in term for key in required_keys):
+                return {"status": "error", "message": "Invalid response format"}
+        return {"status": "success", "message": "Summary completed"}
+
+    summary = ask_gpt(summary_prompt, resp_type="json", valid_def=valid_summary, log_title="summary")
+    summary["terms"].extend(custom_terms_json["terms"])
+
+    with paths.terminology.open("w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=4)
+
+    output.success(f"Summary log saved to {paths.terminology}")
+
+
+
 def run(args: Namespace, config: dict) -> int:
     work_dir = get_work_dir(config) or "."
     paths = build_output_paths(work_dir)
@@ -181,6 +263,8 @@ def run(args: Namespace, config: dict) -> int:
         split_by_spacy(paths)
         if get_toml_value(config, "subtitle.split_by_meaning", False):
             split_sentences_by_meaning(paths, config)
+        if get_toml_value(config, "subtitle.generate_summary", False):
+            get_summary(paths, config)
     except Exception as e:
         output.error(str(e))
         return EXIT.RUNTIME_ERROR
