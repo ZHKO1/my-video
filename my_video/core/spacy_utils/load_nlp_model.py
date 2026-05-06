@@ -33,10 +33,7 @@ def _get_spacy_model_map() -> dict[str, str]:
 
 def resolve_spacy_language() -> str:
     config = _load_config()
-    whisper_language = get_toml_str(config, "transcribe.whisperx.language", default="auto") or "auto"
-    if whisper_language == "auto":
-        return get_toml_str(config, "transcribe.whisperx.detected_language", default="en") or "en"
-    return whisper_language
+    return get_toml_str(config, "transcribe.whisperx.language", default="auto") or "auto"
 
 
 def get_spacy_model(language: str):

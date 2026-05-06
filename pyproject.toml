@@ -4,10 +4,14 @@ version = "0.1.0"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     'audioop-lts; python_version >= "3.13"',
+    "demucs>=4.0.1",
+    "json-repair>=0.39.1",
     "openpyxl>=3.1.5",
+    "openai>=1.55.3,<2",
     "pandas>=2.2.3",
     "pydub>=0.25.1",
     "spacy>=3.8.14",
+    "torch>=2.8.0",
     "whisperx>=3.8.5",
     "yt-dlp[default]>=2025.7.21",
 ]

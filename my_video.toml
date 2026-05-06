@@ -11,6 +11,18 @@ extra_args = [
 demucs = true
 
 [transcribe.whisperx]
-language = "auto"
+language = "en"
 model = "large-v3"
 model_dir = ""
+
+[subtitle]
+target_language = "zh"
+split_by_meaning = true
+max_split_length = 20
+max_workers = 4
+
+[subtitle.translate.api]
+key = "sk-e4b3998282714334a6d486f8781bec72"
+base_url = "https://api.deepseek.com"
+model = "deepseek-v4-flash"
+llm_support_json = true
