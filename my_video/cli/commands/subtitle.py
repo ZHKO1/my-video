@@ -13,6 +13,8 @@ from my_video.cli import output
 from my_video.cli import exit_codes as EXIT
 from my_video.cli.config import get_toml_value, get_work_dir
 from my_video.core.prompts import get_split_prompt, get_summary_prompt
+from my_video.core.subtitle_alignment import align_timestamp
+from my_video.core.subtitle_trim import check_len_then_trim
 from my_video.core.spacy_utils.load_nlp_model import resolve_spacy_language
 from my_video.core.spacy_utils import (
     init_nlp,
@@ -21,6 +23,7 @@ from my_video.core.spacy_utils import (
     split_long_by_root_main,
     split_sentences_main,
 )
+from my_video.core.translate_lines import translate_lines
 from my_video.core.utils import ask_gpt, check_file_exists, get_joiner
 from my_video.core.utils.models import OutputPaths, build_output_paths
 
@@ -179,7 +182,8 @@ def _get_summary_length(config: dict) -> int:
 
 def combine_chunks(paths: OutputPaths, config: dict) -> str:
     """Combine the text chunks identified by whisper into a single long text"""
-    with paths.split_by_meaning.open("r", encoding="utf-8") as file:
+    source_path = paths.split_by_meaning if paths.split_by_meaning.exists() else paths.split_by_nlp
+    with source_path.open("r", encoding="utf-8") as file:
         sentences = file.readlines()
     cleaned_sentences = [line.strip() for line in sentences]
     combined_text = " ".join(cleaned_sentences)
@@ -188,6 +192,9 @@ def combine_chunks(paths: OutputPaths, config: dict) -> str:
 
 def search_things_to_note_in_prompt(paths: OutputPaths, sentence: str):
     """Search for terms to note in the given sentence"""
+    if not paths.terminology.exists():
+        return None
+
     with paths.terminology.open("r", encoding="utf-8") as file:
         things_to_note = json.load(file)
     things_to_note_list = [term["src"] for term in things_to_note["terms"] if term["src"].lower() in sentence.lower()]
@@ -250,6 +257,113 @@ def get_summary(paths: OutputPaths, config: dict):
     output.success(f"Summary log saved to {paths.terminology}")
 
 
+# Function to split text into chunks
+def split_chunks_by_chars(paths: OutputPaths, chunk_size, max_i):
+    """Split text into chunks based on character count, return a list of multi-line text chunks"""
+    source_path = paths.split_by_meaning if paths.split_by_meaning.exists() else paths.split_by_nlp
+    with source_path.open("r", encoding="utf-8") as file:
+        sentences = file.read().strip().split("\n")
+
+    chunks = []
+    chunk = ""
+    sentence_count = 0
+    for sentence in sentences:
+        if len(chunk) + len(sentence + "\n") > chunk_size or sentence_count == max_i:
+            chunks.append(chunk.strip())
+            chunk = sentence + "\n"
+            sentence_count = 1
+        else:
+            chunk += sentence + "\n"
+            sentence_count += 1
+    if chunk.strip():
+        chunks.append(chunk.strip())
+    return chunks
+
+# Get context from surrounding chunks
+def get_previous_content(chunks, chunk_index):
+    return None if chunk_index == 0 else chunks[chunk_index - 1].split("\n")[-3:]
+def get_after_content(chunks, chunk_index):
+    return None if chunk_index == len(chunks) - 1 else chunks[chunk_index + 1].split("\n")[:2]
+
+# 🔍 Translate a single chunk
+def translate_chunk(paths: OutputPaths, chunk, chunks, theme_prompt, i):
+    things_to_note_prompt = search_things_to_note_in_prompt(paths, chunk)
+    previous_content_prompt = get_previous_content(chunks, i)
+    after_content_prompt = get_after_content(chunks, i)
+    translation, english_result = translate_lines(chunk, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
+    return i, english_result, translation
+
+# Add similarity calculation function
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
+# 🚀 Main function to translate all chunks
+@check_file_exists(lambda paths, *_args, **_kwargs: paths.translation)
+def translate_all(paths: OutputPaths, config: dict):
+    output.info("Start translating all chunks")
+    chunks = split_chunks_by_chars(
+        paths,
+        chunk_size=int(get_toml_value(config, "subtitle.translate.chunk_size", 600) or 600),
+        max_i=int(get_toml_value(config, "subtitle.translate.max_lines_per_chunk", 10) or 10),
+    )
+    if not chunks:
+        raise ValueError("No subtitle chunks found for translation")
+
+    theme_prompt = None
+    if paths.terminology.exists():
+        with paths.terminology.open("r", encoding="utf-8") as file:
+            theme_prompt = json.load(file).get("theme")
+
+    max_workers = int(get_toml_value(config, "subtitle.max_workers", 4) or 4)
+    progress = output.ProgressLine("Translating chunks").start()
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for i, chunk in enumerate(chunks):
+            future = executor.submit(translate_chunk, paths, chunk, chunks, theme_prompt, i)
+            futures.append(future)
+        for done_count, future in enumerate(concurrent.futures.as_completed(futures), start=1):
+            results.append(future.result())
+            progress.update(int(done_count * 100 / len(chunks)), f"Translating chunks {done_count}/{len(chunks)}")
+    progress.finish("Chunk translation complete")
+
+    results.sort(key=lambda x: x[0])
+
+    src_text, trans_text = [], []
+    for i, chunk in enumerate(chunks):
+        chunk_lines = chunk.split("\n")
+        src_text.extend(chunk_lines)
+
+        chunk_text = "".join(chunk_lines).lower()
+        matching_results = [(r, similar("".join(r[1].split("\n")).lower(), chunk_text)) for r in results]
+        best_match = max(matching_results, key=lambda x: x[1])
+
+        if best_match[1] < 0.9:
+            raise ValueError(f"Translation matching failed (chunk {i})")
+        elif best_match[1] < 1.0:
+            output.warn(f"Similar match found for chunk {i}, similarity: {best_match[1]:.3f}")
+
+        trans_text.extend(best_match[0][2].split("\n"))
+
+    df_text = pd.read_excel(paths.cleaned_chunks)
+    df_text["text"] = df_text["text"].str.strip('"').str.strip()
+    df_translate = pd.DataFrame({"Source": src_text, "Translation": trans_text})
+    subtitle_output_configs = [("trans_subs_for_audio.srt", ["Translation"])]
+    df_time = align_timestamp(df_text, df_translate, subtitle_output_configs, output_dir=None, for_display=False)
+
+    min_trim_duration = float(get_toml_value(config, "subtitle.translate.min_trim_duration", 3.5) or 3.5)
+    # df_time["Translation"] = df_time.apply(
+    #     lambda x: check_len_then_trim(x["Translation"], x["duration"])
+    #     if x["duration"] > min_trim_duration
+    #     else x["Translation"],
+    #     axis=1,
+    # )
+
+    df_time.to_excel(paths.translation, index=False)
+    output.success(f"Translation completed and results saved to {paths.translation}")
+
+
+
 
 def run(args: Namespace, config: dict) -> int:
     work_dir = get_work_dir(config) or "."
@@ -265,10 +379,13 @@ def run(args: Namespace, config: dict) -> int:
             split_sentences_by_meaning(paths, config)
         if get_toml_value(config, "subtitle.generate_summary", False):
             get_summary(paths, config)
+        
+        translate_all(paths, config)
+        
     except Exception as e:
         output.error(str(e))
         return EXIT.RUNTIME_ERROR
 
     if quiet:
-        print(paths.split_by_nlp)
+        print(paths.translation)
     return EXIT.SUCCESS
