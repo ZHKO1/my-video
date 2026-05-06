@@ -35,6 +35,10 @@ uv sync --group dev
 
 默认依赖当前包含：
 
+- `audioop-lts`（Python 3.13 下给 `pydub` 提供 `audioop` 兼容层）
+- `openpyxl`
+- `pandas`
+- `pydub`
 - `whisperx`
 - `yt-dlp`
 
@@ -107,6 +111,30 @@ extra_args = [
 
 `work_dir` 为统一工作目录，所有产物都写入该目录。
 
+## transcribe 配置
+
+`my_video transcribe` 也读取当前目录下的 `my_video.toml`。
+
+- `work_dir`：全局工作目录，支持 `~`
+- `[transcribe].demucs`：是否启用 Demucs 人声分离
+- `[transcribe.whisperx].language`：WhisperX 语言，`"auto"` 表示自动检测
+- `[transcribe.whisperx].model`：WhisperX 模型名，默认 `"large-v3"`
+- `[transcribe.whisperx].model_dir`：本地模型目录，可留空
+
+示例：
+
+```toml
+work_dir = "~/work/my-video"
+
+[transcribe]
+demucs = true
+
+[transcribe.whisperx]
+language = "auto"
+model = "large-v3"
+model_dir = ""
+```
+
 ## download 行为
 
 `my_video download` 的执行顺序：
@@ -119,3 +147,45 @@ extra_args = [
 - 视频下载失败：命令直接失败
 - 字幕下载失败：只打印 warning，不影响整体成功
 - 字幕路径判定：匹配与目标字幕名前缀一致的 `.srt` 文件，命中后作为字幕路径输出
+
+## transcribe 用法
+
+命令格式：
+
+```bash
+uv run my-video transcribe <input-file> [-v | -q]
+```
+
+示例：
+
+```bash
+uv run my-video transcribe ~/work/my-video/demo.webm -v
+```
+
+行为：
+
+1. 用 `ffmpeg` 提取音频到工作目录。
+2. 如果 `[transcribe].demucs = true`，先做人声分离，并用人声轨做对齐。
+3. 按静音点切分长音频。
+4. 用本地 WhisperX 逐段转写并对齐。
+5. 保存词级中间结果到 Excel。
+
+当前实现的主要输出路径：
+
+- `<input-file-name>.srt`：源字幕文件，写在 `work_dir/` 下
+- `log/cleaned_chunks.xlsx`：词级中间结果
+- `audio/raw.mp3`：抽取后的原始音频
+- `audio/vocal.mp3`：Demucs 人声轨
+- `audio/background.mp3`：Demucs 背景音轨
+
+这些路径都是相对于 `work_dir` 的。例如当 `work_dir = "~/work/my-video"` 时，字幕文件会写到：
+
+```text
+~/work/my-video/demo.srt
+```
+
+注意：
+
+- `demucs` 不是默认依赖；只有在 `[transcribe].demucs = true` 时才需要额外安装。
+- 第一次加载 WhisperX / pyannote 模型时可能会下载模型文件。
+- 当前 `transcribe` 会写 `cleaned_chunks.xlsx`，所以环境里需要 `openpyxl`。

@@ -11,6 +11,9 @@ class OutputPaths:
 
     # intermediate files
     cleaned_chunks: Path
+    split_by_mark: Path
+    split_by_comma: Path
+    split_by_connector: Path
     split_by_nlp: Path
     split_by_meaning: Path
     terminology: Path
@@ -38,6 +41,9 @@ def build_output_paths(output_dir: str | Path) -> OutputPaths:
         log_dir=log_dir,
         audio_dir=audio_dir,
         cleaned_chunks=log_dir / "cleaned_chunks.xlsx",
+        split_by_mark=log_dir / "split_by_mark.txt",
+        split_by_comma=log_dir / "split_by_comma.txt",
+        split_by_connector=log_dir / "split_by_connector.txt",
         split_by_nlp=log_dir / "split_by_nlp.txt",
         split_by_meaning=log_dir / "split_by_meaning.txt",
         terminology=log_dir / "terminology.json",

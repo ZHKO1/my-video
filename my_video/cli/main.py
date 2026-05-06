@@ -43,9 +43,21 @@ def _build_transcribe_parser(subparsers) -> None:
         description="Convert audio or video files to subtitle files using ASR (Automatic Speech Recognition).",
     )
     p.add_argument("input", help="Audio or video file path")
+    p.add_argument("--format", default="srt", help="Output subtitle format")
     _add_common_options(p)
 
     p.set_defaults(func=_run_transcribe)
+
+def _build_subtitle_parser(subparsers) -> None:
+    p = subparsers.add_parser(
+        "subtitle",
+        help="Optimize and/or translate subtitle files",
+        description="Process subtitle files with a lightweight placeholder pipeline.",
+    )
+    # p.add_argument("input", help="Subtitle file path")
+    _add_common_options(p)
+
+    p.set_defaults(func=_run_subtitle)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _build_download_parser(subparsers)
     _build_transcribe_parser(subparsers)
+    _build_subtitle_parser(subparsers)
 
     return parser
 
@@ -79,6 +92,11 @@ def _run_download(args: argparse.Namespace) -> int:
 
 def _run_transcribe(args: argparse.Namespace) -> int:
     from my_video.cli.commands.transcribe import run
+    config = _load_config()
+    return run(args, config)
+
+def _run_subtitle(args: argparse.Namespace) -> int:
+    from my_video.cli.commands.subtitle import run
     config = _load_config()
     return run(args, config)
 
