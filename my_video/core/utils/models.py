@@ -20,6 +20,12 @@ class OutputPaths:
     translation: Path
     split_sub: Path
     remerged: Path
+    src_srt: Path
+    trans_srt: Path
+    src_trans_srt: Path
+    trans_src_srt: Path
+    src_subs_for_audio_srt: Path
+    trans_subs_for_audio_srt: Path
 
     # audio files
     audio_task: Path
@@ -50,6 +56,12 @@ def build_output_paths(output_dir: str | Path) -> OutputPaths:
         translation=log_dir / "translation_results.xlsx",
         split_sub=log_dir / "translation_results_for_subtitles.xlsx",
         remerged=log_dir / "translation_results_remerged.xlsx",
+        src_srt=base / "src.srt",
+        trans_srt=base / "trans.srt",
+        src_trans_srt=base / "src_trans.srt",
+        trans_src_srt=base / "trans_src.srt",
+        src_subs_for_audio_srt=audio_dir / "src_subs_for_audio.srt",
+        trans_subs_for_audio_srt=audio_dir / "trans_subs_for_audio.srt",
         audio_task=audio_dir / "tts_tasks.xlsx",
         raw_audio_file=audio_dir / "raw.mp3",
         vocal_audio_file=audio_dir / "vocal.mp3",

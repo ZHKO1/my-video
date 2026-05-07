@@ -6,13 +6,16 @@ import math
 from argparse import Namespace
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import List, Tuple
 
+import autocorrect_py as autocorrect
 import pandas as pd
 
+from my_video.core.utils import except_handler
 from my_video.cli import output
 from my_video.cli import exit_codes as EXIT
-from my_video.cli.config import get_toml_value, get_work_dir
-from my_video.core.prompts import get_split_prompt, get_summary_prompt
+from my_video.cli.config import get_toml_str, get_toml_value, get_work_dir
+from my_video.core.prompts import get_align_prompt, get_split_prompt, get_summary_prompt
 from my_video.core.subtitle_alignment import align_timestamp
 from my_video.core.subtitle_trim import check_len_then_trim
 from my_video.core.spacy_utils.load_nlp_model import resolve_spacy_language
@@ -26,6 +29,18 @@ from my_video.core.spacy_utils import (
 from my_video.core.translate_lines import translate_lines
 from my_video.core.utils import ask_gpt, check_file_exists, get_joiner
 from my_video.core.utils.models import OutputPaths, build_output_paths
+
+SUBTITLE_OUTPUT_CONFIGS = [
+    ("src.srt", ["Source"]),
+    ("trans.srt", ["Translation"]),
+    ("src_trans.srt", ["Source", "Translation"]),
+    ("trans_src.srt", ["Translation", "Source"]),
+]
+
+AUDIO_SUBTITLE_OUTPUT_CONFIGS = [
+    ("src_subs_for_audio.srt", ["Source"]),
+    ("trans_subs_for_audio.srt", ["Translation"]),
+]
 
 
 @check_file_exists(lambda paths, *_args, **_kwargs: paths.split_by_nlp)
@@ -363,6 +378,146 @@ def translate_all(paths: OutputPaths, config: dict):
     output.success(f"Translation completed and results saved to {paths.translation}")
 
 
+# ! You can modify your own weights here
+# Chinese and Japanese 2.5 characters, Korean 2 characters, Thai 1.5 characters, full-width symbols 2 characters, other English-based and half-width symbols 1 character
+def calc_len(text: str) -> float:
+    text = str(text) # force convert
+    def char_weight(char):
+        code = ord(char)
+        if 0x4E00 <= code <= 0x9FFF or 0x3040 <= code <= 0x30FF:  # Chinese and Japanese
+            return 1.75
+        elif 0xAC00 <= code <= 0xD7A3 or 0x1100 <= code <= 0x11FF:  # Korean
+            return 1.5
+        elif 0x0E00 <= code <= 0x0E7F:  # Thai
+            return 1
+        elif 0xFF01 <= code <= 0xFF5E:  # full-width symbols
+            return 1.75
+        else:  # other characters (e.g. English and half-width symbols)
+            return 1
+
+    return sum(char_weight(char) for char in text)
+
+def align_subs(src_sub: str, tr_sub: str, src_part: str, config: dict) -> Tuple[List[str], List[str], str]:
+    align_prompt = get_align_prompt(src_sub, tr_sub, src_part)
+
+    def valid_align(response_data):
+        if "align" not in response_data:
+            return {"status": "error", "message": "Missing required key: `align`"}
+        if len(response_data["align"]) < 2:
+            return {"status": "error", "message": "Align does not contain more than 1 part as expected!"}
+        return {"status": "success", "message": "Align completed"}
+
+    parsed = ask_gpt(align_prompt, resp_type="json", valid_def=valid_align, log_title="align_subs")
+    align_data = parsed["align"]
+    src_parts = src_part.split("\n")
+    tr_parts = [item[f'target_part_{i+1}'].strip() for i, item in enumerate(align_data)]
+
+    language = get_toml_str(config, "transcribe.whisperx.language", default="auto") or "auto"
+    joiner = get_joiner(language)
+    tr_remerged = joiner.join(tr_parts)
+
+    output.info("Aligned subtitle parts")
+    output.info(f"SRC_LANG: {' || '.join(src_parts)}")
+    output.info(f"TARGET_LANG: {' || '.join(tr_parts)}")
+
+    return src_parts, tr_parts, tr_remerged
+
+def split_align_subs(src_lines: List[str], tr_lines: List[str], config: dict):
+    max_sub_length = int(get_toml_value(config, "subtitle.max_length", 75) or 75)
+    target_sub_multiplier = float(get_toml_value(config, "subtitle.target_multiplier", 1.0) or 1.0)
+    remerged_tr_lines = tr_lines.copy()
+
+    to_split = []
+    for i, (src, tr) in enumerate(zip(src_lines, tr_lines)):
+        src, tr = str(src), str(tr)
+        if len(src) > max_sub_length or calc_len(tr) * target_sub_multiplier > max_sub_length:
+            to_split.append(i)
+            output.info(f"Line {i} needs split")
+            output.info(f"Source Line: {src}")
+            output.info(f"Target Line: {tr}")
+    
+    @except_handler("Error in split_align_subs")
+    def process(i):
+        split_src = split_sentence(src_lines[i], num_parts=2).strip()
+        src_parts, tr_parts, tr_remerged = align_subs(src_lines[i], tr_lines[i], split_src, config)
+        src_lines[i] = src_parts
+        tr_lines[i] = tr_parts
+        remerged_tr_lines[i] = tr_remerged
+
+    max_workers = int(get_toml_value(config, "subtitle.max_workers", 4) or 4)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor.map(process, to_split)
+
+    # Flatten `src_lines` and `tr_lines`
+    src_lines = [item for sublist in src_lines for item in (sublist if isinstance(sublist, list) else [sublist])]
+    tr_lines = [item for sublist in tr_lines for item in (sublist if isinstance(sublist, list) else [sublist])]
+
+    return src_lines, tr_lines, remerged_tr_lines
+
+@check_file_exists(lambda paths, *_args, **_kwargs: paths.remerged)
+def split_for_sub_main(paths: OutputPaths, config: dict):
+    output.info("Start splitting subtitles for subtitle display")
+
+    df = pd.read_excel(paths.translation)
+    src = df["Source"].tolist()
+    trans = df["Translation"].tolist()
+
+    max_sub_length = int(get_toml_value(config, "subtitle.max_length", 75) or 75)
+    target_sub_multiplier = float(get_toml_value(config, "subtitle.target_multiplier", 1.0) or 1.0)
+
+    split_src = src
+    split_trans = trans
+    remerged = trans
+    for attempt in range(3):
+        output.info(f"Split attempt {attempt + 1}")
+        split_src, split_trans, remerged = split_align_subs(src.copy(), trans, config)
+
+        if all(len(str(src_line)) <= max_sub_length for src_line in split_src) and all(
+            calc_len(str(tr_line)) * target_sub_multiplier <= max_sub_length for tr_line in split_trans
+        ):
+            break
+
+        src, trans = split_src, split_trans
+
+    if len(src) > len(remerged):
+        remerged += [None] * (len(src) - len(remerged))
+    elif len(remerged) > len(src):
+        src += [None] * (len(remerged) - len(src))
+
+    pd.DataFrame({"Source": split_src, "Translation": split_trans}).to_excel(paths.split_sub, index=False)
+    pd.DataFrame({"Source": src, "Translation": remerged}).to_excel(paths.remerged, index=False)
+    output.success(f"Subtitle split results saved to {paths.split_sub}")
+    output.success(f"Remerged subtitle results saved to {paths.remerged}")
+
+
+
+# ✨ Beautify the translation
+def clean_translation(x):
+    if pd.isna(x):
+        return ""
+    cleaned = str(x).strip("。").strip("，")
+    return autocorrect.format(cleaned)
+
+
+def _all_paths_exist(paths: list[Path]) -> bool:
+    return all(path.exists() for path in paths)
+
+@check_file_exists(lambda paths, *_args, **_kwargs: paths.trans_src_srt)
+def align_timestamp_main(paths: OutputPaths):
+    subtitle_outputs = [
+        paths.src_srt,
+        paths.trans_srt,
+        paths.src_trans_srt,
+        paths.trans_src_srt,
+    ]
+
+    df_text = pd.read_excel(paths.cleaned_chunks)
+    df_text["text"] = df_text["text"].str.strip('"').str.strip()
+
+    df_translate = pd.read_excel(paths.split_sub)
+    df_translate["Translation"] = df_translate["Translation"].apply(clean_translation)
+    align_timestamp(df_text, df_translate, SUBTITLE_OUTPUT_CONFIGS, paths.output_dir)
+    output.success(f"Subtitle files generated in {paths.output_dir}")
 
 
 def run(args: Namespace, config: dict) -> int:
@@ -381,7 +536,11 @@ def run(args: Namespace, config: dict) -> int:
             get_summary(paths, config)
         
         translate_all(paths, config)
-        
+        if get_toml_value(config, "subtitle.split_for_sub", False):
+            split_for_sub_main(paths, config)
+
+        align_timestamp_main(paths)
+
     except Exception as e:
         output.error(str(e))
         return EXIT.RUNTIME_ERROR

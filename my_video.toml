@@ -19,12 +19,20 @@ model_dir = ""
 target_language = "zh"
 split_by_meaning = true
 generate_summary = true
+split_for_sub = true
 max_split_length = 20
 max_workers = 4
 summary_length = 8000
+max_length = 75
+target_multiplier = 1.0
 
 [subtitle.translate.api]
 key = "sk-e4b3998282714334a6d486f8781bec72"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
 llm_support_json = true
+
+[subtitle.translate]
+chunk_size = 600
+max_lines_per_chunk = 10
+min_trim_duration = 3.5
