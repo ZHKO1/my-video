@@ -3,7 +3,7 @@ from pathlib import Path
 
 from my_video.cli import exit_codes as EXIT
 from my_video.core.utils.decorator import check_file_exists
-from my_video.cli.commands import subtitle, transcribe
+from my_video.cli.commands import subtitle, synthesize, transcribe
 from my_video.cli.main import build_parser
 
 
@@ -93,6 +93,8 @@ def test_subtitle_returns_success_for_existing_input(tmp_path: Path) -> None:
         paths.split_by_nlp.write_text("ok", encoding="utf-8")
 
     subtitle.split_by_spacy = fake_split_by_spacy
+    subtitle.translate_all = lambda *_args, **_kwargs: None
+    subtitle.align_timestamp_main = lambda *_args, **_kwargs: None
     result = subtitle.run(
         Namespace(input=str(input_file), verbose=False, quiet=True),
         {"work_dir": str(tmp_path / "work-dir")},
@@ -110,6 +112,8 @@ def test_subtitle_uses_work_dir_from_config(tmp_path: Path) -> None:
         captured.append(paths)
 
     subtitle.split_by_spacy = fake_split_by_spacy
+    subtitle.translate_all = lambda *_args, **_kwargs: None
+    subtitle.align_timestamp_main = lambda *_args, **_kwargs: None
 
     result = subtitle.run(
         Namespace(input=str(input_file), verbose=False, quiet=True),
@@ -119,6 +123,32 @@ def test_subtitle_uses_work_dir_from_config(tmp_path: Path) -> None:
     assert result == EXIT.SUCCESS
     assert len(captured) == 1
     assert captured[0].split_by_nlp == tmp_path / "subtitle-work" / "log" / "split_by_nlp.txt"
+
+
+def test_synthesize_parser_accepts_expected_arguments() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["synthesize", "demo.mp4", "demo.srt", "--output", "out.mp4", "-q"])
+
+    assert args.command == "synthesize"
+    assert args.input == "demo.mp4"
+    assert args.subtitle == "demo.srt"
+    assert args.output == "out.mp4"
+    assert args.quiet is True
+    assert callable(args.func)
+
+
+def test_synthesize_returns_success_for_existing_inputs(tmp_path: Path) -> None:
+    input_file = tmp_path / "demo.mp4"
+    subtitle_file = tmp_path / "demo.srt"
+    input_file.write_text("video", encoding="utf-8")
+    subtitle_file.write_text("1\n00:00:00,000 --> 00:00:01,000\nhello\n", encoding="utf-8")
+
+    result = synthesize.run(
+        Namespace(input=str(input_file), subtitle=str(subtitle_file), output=None, verbose=False, quiet=True),
+        {"work_dir": str(tmp_path / "work-dir")},
+    )
+
+    assert result == EXIT.SUCCESS
 
 
 def test_check_file_exists_skips_when_dynamic_path_exists(tmp_path: Path) -> None:

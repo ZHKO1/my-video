@@ -54,10 +54,22 @@ def _build_subtitle_parser(subparsers) -> None:
         help="Optimize and/or translate subtitle files",
         description="Process subtitle files with a lightweight placeholder pipeline.",
     )
-    # p.add_argument("input", help="Subtitle file path")
+    p.add_argument("input", help="Subtitle file path")
     _add_common_options(p)
 
     p.set_defaults(func=_run_subtitle)
+
+def _build_synthesize_parser(subparsers) -> None:
+    p = subparsers.add_parser(
+        "synthesize",
+        help="Burn subtitles into video",
+        description="Render a video with subtitles using a lightweight placeholder pipeline.",
+    )
+    p.add_argument("input", help="Video file path")
+    p.add_argument("--output", help="Output video path")
+    _add_common_options(p)
+
+    p.set_defaults(func=_run_synthesize)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -74,6 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     _build_download_parser(subparsers)
     _build_transcribe_parser(subparsers)
     _build_subtitle_parser(subparsers)
+    _build_synthesize_parser(subparsers)
 
     return parser
 
@@ -97,6 +110,11 @@ def _run_transcribe(args: argparse.Namespace) -> int:
 
 def _run_subtitle(args: argparse.Namespace) -> int:
     from my_video.cli.commands.subtitle import run
+    config = _load_config()
+    return run(args, config)
+
+def _run_synthesize(args: argparse.Namespace) -> int:
+    from my_video.cli.commands.synthesize import run
     config = _load_config()
     return run(args, config)
 

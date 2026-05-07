@@ -5,6 +5,8 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     'audioop-lts; python_version >= "3.13"',
     "autocorrect-py>=2.0.1",
+    "numpy>=2.2.6",
+    "opencv-python>=4.10.0.84",
     "demucs>=4.0.1",
     "json-repair>=0.39.1",
     "openpyxl>=3.1.5",
