@@ -7,7 +7,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import platform
 
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
@@ -16,15 +15,10 @@ from my_video.core.utils.models import OutputPaths, build_output_paths
 
 SRC_FONT_SIZE = 15
 TRANS_FONT_SIZE = 17
-FONT_NAME = "Arial"
-TRANS_FONT_NAME = "Arial"
-
-if platform.system() == "Linux":
-    FONT_NAME = "NotoSansCJK-Regular"
-    TRANS_FONT_NAME = "NotoSansCJK-Regular"
-elif platform.system() == "Darwin":
-    FONT_NAME = "Arial Unicode MS"
-    TRANS_FONT_NAME = "Arial Unicode MS"
+FONT_NAME = "SourceHanSansSC-Regular"
+TRANS_FONT_NAME = "SourceHanSansSC-Regular"
+FONT_FILE_PATH = str(Path(__file__).resolve().parents[2] / "assets" / "SourceHanSansSC-Regular.otf")
+FONT_DIR_PATH = str(Path(FONT_FILE_PATH).parent)
 
 SRC_FONT_COLOR = "&HFFFFFF"
 SRC_OUTLINE_COLOR = "&H000000"
@@ -77,15 +71,22 @@ def merge_subtitles_to_video(
 
     src_srt = _escape_subtitle_path(paths.src_srt)
     trans_srt = _escape_subtitle_path(paths.trans_srt)
+    font_dir = _escape_subtitle_path(Path(FONT_DIR_PATH))
+    src_style = (
+        f"FontSize={SRC_FONT_SIZE},FontName={FONT_NAME},"
+        f"PrimaryColour={SRC_FONT_COLOR},OutlineColour={SRC_OUTLINE_COLOR},OutlineWidth={SRC_OUTLINE_WIDTH},"
+        f"ShadowColour={SRC_SHADOW_COLOR},BorderStyle=1"
+    )
+    trans_style = (
+        f"FontSize={TRANS_FONT_SIZE},FontName={TRANS_FONT_NAME},"
+        f"PrimaryColour={TRANS_FONT_COLOR},OutlineColour={TRANS_OUTLINE_COLOR},OutlineWidth={TRANS_OUTLINE_WIDTH},"
+        f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle=4"
+    )
     filter_graph = (
         f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
         f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2,"
-        f"subtitles='{src_srt}':force_style='FontSize={SRC_FONT_SIZE},FontName={FONT_NAME},"
-        f"PrimaryColour={SRC_FONT_COLOR},OutlineColour={SRC_OUTLINE_COLOR},OutlineWidth={SRC_OUTLINE_WIDTH},"
-        f"ShadowColour={SRC_SHADOW_COLOR},BorderStyle=1',"
-        f"subtitles='{trans_srt}':force_style='FontSize={TRANS_FONT_SIZE},FontName={TRANS_FONT_NAME},"
-        f"PrimaryColour={TRANS_FONT_COLOR},OutlineColour={TRANS_OUTLINE_COLOR},OutlineWidth={TRANS_OUTLINE_WIDTH},"
-        f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle=4'"
+        f"subtitles='{src_srt}':fontsdir='{font_dir}':force_style='{src_style}',"
+        f"subtitles='{trans_srt}':fontsdir='{font_dir}':force_style='{trans_style}'"
     )
 
     ffmpeg_cmd = [
