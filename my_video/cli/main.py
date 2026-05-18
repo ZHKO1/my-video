@@ -22,9 +22,7 @@ from my_video.cli.config import load_toml_config
 
 def _add_common_options(parser: argparse.ArgumentParser) -> None:
     """Add options common to all commands."""
-    verbosity = parser.add_mutually_exclusive_group()
-    verbosity.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-    verbosity.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (only output result path)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
 def _build_download_parser(subparsers) -> None:
     p = subparsers.add_parser(
@@ -33,7 +31,8 @@ def _build_download_parser(subparsers) -> None:
         description="Download video from YouTube, Bilibili, and other sites supported by yt-dlp.",
     )
     p.add_argument("url", help="Video URL")
-    _add_common_options(p)
+    p.add_argument("--force", action="store_true", help="Overwrite an existing failed or running workspace")
+    # _add_common_options(p)
     p.set_defaults(func=_run_download)
 
 def _build_transcribe_parser(subparsers) -> None:
@@ -44,7 +43,7 @@ def _build_transcribe_parser(subparsers) -> None:
     )
     p.add_argument("input", help="Audio or video file path")
     p.add_argument("--format", default="srt", help="Output subtitle format")
-    _add_common_options(p)
+    # _add_common_options(p)
 
     p.set_defaults(func=_run_transcribe)
 
@@ -55,7 +54,7 @@ def _build_subtitle_parser(subparsers) -> None:
         description="Process subtitle files with a lightweight placeholder pipeline.",
     )
     p.add_argument("input", help="Subtitle file path")
-    _add_common_options(p)
+    # _add_common_options(p)
 
     p.set_defaults(func=_run_subtitle)
 
@@ -67,7 +66,7 @@ def _build_synthesize_parser(subparsers) -> None:
     )
     p.add_argument("input", help="Video file path")
     p.add_argument("--output", help="Output video path")
-    _add_common_options(p)
+    # _add_common_options(p)
 
     p.set_defaults(func=_run_synthesize)
 

@@ -526,8 +526,6 @@ def run(args: Namespace, config: dict) -> int:
     paths.output_dir.mkdir(parents=True, exist_ok=True)
     paths.log_dir.mkdir(parents=True, exist_ok=True)
 
-    quiet = getattr(args, "quiet", False)
-
     try:
         split_by_spacy(paths)
         if get_toml_value(config, "subtitle.split_by_meaning", False):
@@ -545,6 +543,4 @@ def run(args: Namespace, config: dict) -> int:
         output.error(str(e))
         return EXIT.RUNTIME_ERROR
 
-    if quiet:
-        print(paths.translation)
     return EXIT.SUCCESS

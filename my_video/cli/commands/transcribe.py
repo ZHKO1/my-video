@@ -32,9 +32,8 @@ def run(args: Namespace, config: dict) -> int:
     output_path = str((paths.output_dir / input_path.name).with_suffix(f".{out_fmt}"))
 
     verbose = getattr(args, "verbose", False)
-    quiet = getattr(args, "quiet", False)
 
-    progress = None if quiet else output.ProgressLine(f"Transcribing...").start()
+    progress = output.ProgressLine(f"Transcribing...").start()
 
     def callback(pct: int, msg: str) -> None:
         if progress:
@@ -78,8 +77,6 @@ def run(args: Namespace, config: dict) -> int:
         if progress:
             n = len(segments)
             progress.finish(f"Transcription complete -> {output_path} ({n} segment{'' if n == 1 else 's'})")
-        if quiet:
-            print(output_path)
         return EXIT.SUCCESS
 
     except Exception as e:

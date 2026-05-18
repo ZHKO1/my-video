@@ -135,7 +135,6 @@ def run(args: Namespace, config: dict) -> int:
     paths.output_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = Path(args.output) if args.output else _default_output_path(input_path, paths)
-    quiet = getattr(args, "quiet", False)
 
     try:
         merge_subtitles_to_video(input_path, paths, output_path, config)
@@ -143,6 +142,4 @@ def run(args: Namespace, config: dict) -> int:
         output.error(str(exc))
         return EXIT.RUNTIME_ERROR
 
-    if quiet:
-        print(output_path)
     return EXIT.SUCCESS

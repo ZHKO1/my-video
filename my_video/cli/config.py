@@ -47,20 +47,11 @@ def get_toml_str(config: dict[str, Any], dotted_key: str, *, default: str | None
     return value
 
 
-def get_toml_str_list(config: dict[str, Any], dotted_key: str, *, default: list[str] | None = None) -> list[str]:
-    """Get string list value by dotted key."""
-    fallback = default if default is not None else []
-    value = get_toml_value(config, dotted_key, fallback)
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-        raise ValueError(f"Invalid config key '{dotted_key}': expected string array")
-    return value
-
-
 def expand_user_path(path: str | None) -> str | None:
     """Expand ~ in path string."""
     return str(Path(path).expanduser()) if path else None
 
 
-def get_work_dir(config: dict[str, Any], *, default: str | None = None) -> str | None:
+def get_work_dir(config: dict[str, Any], *, default: str | None = ".") -> str | None:
     """Get global work directory from root key `work_dir`."""
     return expand_user_path(get_toml_str(config, "work_dir", default=default))
