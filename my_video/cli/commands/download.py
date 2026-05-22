@@ -11,12 +11,9 @@ import sys
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
 from my_video.cli.config import get_toml_str, get_work_dir
+from my_video.core.utils.helper import read_json
+from my_video.core.workspace import create_workspace, resolve_workspace
 from my_video.core.yt_dlp_download import DownloadRequest, download, fetch_video_info
-from my_video.core.workspace import (
-    create_workspace,
-    read_workspace_info,
-    resolve_workspace,
-)
 
 
 def _write_info_json(info_path: str | Path, info: dict) -> None:
@@ -58,35 +55,37 @@ def run(args: Namespace, _config: dict) -> int:
 
         info = fetch_video_info(args.url, cookie_path=cookie_path, proxy=proxy)
         title = info["title"].strip()
-        workspace = resolve_workspace(work_dir, title)
-        workspace_path = Path(workspace.workspace_path)
-        status_info = read_workspace_info(workspace.status_path)
+        workspace_path = resolve_workspace(work_dir, title)
+        info_path = workspace_path / "info.json"
+        status_path = workspace_path / "status.json"
+        status_info = read_json(status_path)
+        workspace_exists = workspace_path.exists()
 
-        if status_info and status_info.get("stage") == "download" and status_info.get("status") == "success":
-            output.success(f"{title} downloaded: {workspace.workspace_path}/origin/")
-            return EXIT.SUCCESS
 
-        if workspace_path.exists() and _should_prompt_for_overwrite(status_info):
-            if getattr(args, "force", False):
-                output.warn("Overwriting existing download workspace due to --force")
-            elif not sys.stdin.isatty():
-                output.error("Workspace already exists and requires confirmation; rerun with --force")
-                return EXIT.RUNTIME_ERROR
-            elif not _prompt_overwrite(status_info):
-                output.info("Keeping existing workspace unchanged")
-                return EXIT.RUNTIME_ERROR
-
-        if workspace_path.exists():
+        if workspace_exists:
+            if  status_info and status_info.get("stage") == "download" and status_info.get("status") == "success":
+                output.success(f"{title} downloaded: {workspace_path}/origin/")
+                return EXIT.SUCCESS
+            
+            if _should_prompt_for_overwrite(status_info):
+                if getattr(args, "force", False):
+                    output.warn("Overwriting existing download workspace due to --force")
+                elif not sys.stdin.isatty():
+                    output.error("Workspace already exists and requires confirmation; rerun with --force")
+                    return EXIT.RUNTIME_ERROR
+                elif not _prompt_overwrite(status_info):
+                    output.info("Keeping existing workspace unchanged")
+                    return EXIT.RUNTIME_ERROR
             shutil.rmtree(workspace_path / "origin", ignore_errors=True)
         else:
-            workspace = create_workspace(work_dir, title)
+            workspace_path = create_workspace(work_dir, title)
 
-        _write_info_json(workspace.info_path, info)
+        _write_info_json(info_path, info)
 
         download(
             DownloadRequest(
                 url=args.url,
-                workspace_path=workspace.workspace_path,
+                workspace_path=str(workspace_path),
                 cookie_path=cookie_path,
                 proxy=proxy,
             )

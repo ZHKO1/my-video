@@ -6,7 +6,7 @@ from pydub import AudioSegment
 from pydub.silence import detect_silence
 from pydub.utils import mediainfo
 
-from my_video.core.utils.models import OutputPaths
+from my_video.core.workspace import WorkspacePaths
 from my_video.cli import output
 
 def _ffmpeg_has_encoder(encoder_name: str) -> bool:
@@ -19,7 +19,7 @@ def _ffmpeg_has_encoder(encoder_name: str) -> bool:
     except Exception:
         return False
 
-def convert_video_to_audio(video_file: str, paths: OutputPaths):
+def convert_video_to_audio(video_file: str, paths: WorkspacePaths):
     os.makedirs(paths.audio_dir, exist_ok=True)
     if not os.path.exists(paths.raw_audio_file):
         output.info(f"Converting to high quality audio with FFmpeg ......")

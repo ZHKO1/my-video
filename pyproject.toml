@@ -7,7 +7,6 @@ dependencies = [
     "autocorrect-py>=2.0.1",
     "numpy>=2.2.6",
     "opencv-python>=4.10.0.84",
-    "demucs>=4.0.1",
     "json-repair>=0.39.1",
     "openpyxl>=3.1.5",
     "openai>=1.55.3,<2",
@@ -16,6 +15,7 @@ dependencies = [
     "spacy>=3.8.14",
     "torch>=2.8.0",
     "whisperx>=3.8.5",
+    "demucs[dev] @ git+https://github.com/adefossez/demucs",
     "yt-dlp[default]>=2025.7.21",
 ]
 
@@ -29,6 +29,14 @@ dev = ["pytest>=8.0", "ruff>=0.4"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
+
+[tool.uv]
+override-dependencies = [
+    "torchaudio>=2.8.0",  # 强制覆盖 demucs 的 torchaudio<2.2
+]

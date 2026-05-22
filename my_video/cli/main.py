@@ -20,10 +20,6 @@ from typing import List, Optional
 from my_video.cli import exit_codes as EXIT
 from my_video.cli.config import load_toml_config
 
-def _add_common_options(parser: argparse.ArgumentParser) -> None:
-    """Add options common to all commands."""
-    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-
 def _build_download_parser(subparsers) -> None:
     p = subparsers.add_parser(
         "download",
@@ -32,7 +28,6 @@ def _build_download_parser(subparsers) -> None:
     )
     p.add_argument("url", help="Video URL")
     p.add_argument("--force", action="store_true", help="Overwrite an existing failed or running workspace")
-    # _add_common_options(p)
     p.set_defaults(func=_run_download)
 
 def _build_transcribe_parser(subparsers) -> None:
@@ -41,9 +36,7 @@ def _build_transcribe_parser(subparsers) -> None:
         help="Transcribe audio/video to subtitles",
         description="Convert audio or video files to subtitle files using ASR (Automatic Speech Recognition).",
     )
-    p.add_argument("input", help="Audio or video file path")
-    p.add_argument("--format", default="srt", help="Output subtitle format")
-    # _add_common_options(p)
+    p.add_argument("workspace_path", help="Workspace directory path")
 
     p.set_defaults(func=_run_transcribe)
 
@@ -54,7 +47,6 @@ def _build_subtitle_parser(subparsers) -> None:
         description="Process subtitle files with a lightweight placeholder pipeline.",
     )
     p.add_argument("input", help="Subtitle file path")
-    # _add_common_options(p)
 
     p.set_defaults(func=_run_subtitle)
 
@@ -66,7 +58,6 @@ def _build_synthesize_parser(subparsers) -> None:
     )
     p.add_argument("input", help="Video file path")
     p.add_argument("--output", help="Output video path")
-    # _add_common_options(p)
 
     p.set_defaults(func=_run_synthesize)
 

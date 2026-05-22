@@ -5,7 +5,7 @@ from pathlib import Path
 
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
-from my_video.cli.config import get_toml_value, get_work_dir
+from my_video.cli.config import get_toml_value
 from my_video.core.asr_backend.audio_preprocess import (
     convert_video_to_audio,
     normalize_audio_volume,
@@ -16,34 +16,36 @@ from my_video.core.asr_backend.audio_preprocess import (
 )
 from my_video.core.asr_backend.demucs_vl import demucs_audio
 from my_video.core.asr_backend.whisperx_local import transcribe_audio as transcribe_local_audio
-from my_video.core.utils.models import build_output_paths
+from my_video.core.utils.helper import read_json
+from my_video.core.workspace import build_workspace_paths
 
 def run(args: Namespace, config: dict) -> int:
-    input_path = Path(args.input)
-    if not input_path.exists():
-        output.error(f"Input file not found: {input_path}")
+    workspace_path = Path(args.workspace_path).expanduser()
+    if not workspace_path.is_dir():
+        output.error(f"Workspace not found: {workspace_path}")
         return EXIT.FILE_NOT_FOUND
 
-    work_dir = get_work_dir(config) or "."
-    paths = build_output_paths(work_dir)
-    paths.output_dir.mkdir(parents=True, exist_ok=True)
+    status_path = workspace_path / "status.json"
+    status = read_json(status_path)
+    if status is None:
+        output.error(f"status.json not found: {status_path}")
+        return EXIT.FILE_NOT_FOUND
 
-    out_fmt = "srt"
-    output_path = str((paths.output_dir / input_path.name).with_suffix(f".{out_fmt}"))
+    origin = status.get("origin")
+    video_path = origin.get("video_path") if isinstance(origin, dict) else None
+    if not video_path:
+        output.error(f"origin.video_path missing in status.json: {status_path}")
+        return EXIT.RUNTIME_ERROR
+    if not video_path.exists():
+        output.error(f"Video file not found: {video_path}")
+        return EXIT.FILE_NOT_FOUND
 
-    verbose = getattr(args, "verbose", False)
-
-    progress = output.ProgressLine(f"Transcribing...").start()
-
-    def callback(pct: int, msg: str) -> None:
-        if progress:
-            progress.update(pct, f"Transcribing {msg}")
+    paths = build_workspace_paths(workspace_path)
+    output_path = str(paths.src_srt)
 
     try:
-        video_file = str(input_path)
-
         # 1. video to audio
-        convert_video_to_audio(video_file, paths)
+        convert_video_to_audio(video_path, paths)
 
         # 2. Demucs vocal separation:
         if get_toml_value(config, "transcribe.demucs", False):
@@ -73,18 +75,8 @@ def run(args: Namespace, config: dict) -> int:
         df = process_transcription(combined_result)
         save_results(df, paths)
         save_srt(combined_result["segments"], output_path)
-
-        if progress:
-            n = len(segments)
-            progress.finish(f"Transcription complete -> {output_path} ({n} segment{'' if n == 1 else 's'})")
         return EXIT.SUCCESS
 
     except Exception as e:
-        if progress:
-            progress.fail(e)
-        else:
-            output.error(e)
-        if verbose:
-            import traceback
-            traceback.print_exc()
+        output.error(e)
         return EXIT.RUNTIME_ERROR
