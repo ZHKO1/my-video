@@ -120,13 +120,17 @@ def download(request: DownloadRequest) -> DownloadResult:
             "writesubtitles": True,
             "writeautomaticsub": False,
             "subtitleslangs": ["en.*"],
-            "convertsubtitles": "srt",
             "outtmpl": {
                 "default": str(origin_path / "video.%(ext)s"),
                 "subtitle": str(origin_path / "subtitle.%(ext)s"),
                 "thumbnail": str(origin_path / "thumb.%(ext)s"),
             },
             "postprocessors": [
+                {
+                    "key": "FFmpegSubtitlesConvertor",
+                    "format": "srt",
+                    "when": "before_dl",
+                },
                 {
                     "key": "FFmpegThumbnailsConvertor",
                     "format": "jpg",

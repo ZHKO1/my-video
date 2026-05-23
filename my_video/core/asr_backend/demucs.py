@@ -1,17 +1,13 @@
 import gc
 import os
+from pathlib import Path
 
 from my_video.cli import output
-from my_video.core.utils.models import OutputPaths
+from my_video.core.asr_backend.audio_preprocess import normalize_audio_volume
+from my_video.core.utils.decorator import check_file_exists
 
-
-def demucs_audio(paths: OutputPaths) -> None:
-    if os.path.exists(paths.vocal_audio_file) and os.path.exists(paths.background_audio_file):
-        output.warn(
-            f"{paths.vocal_audio_file} and {paths.background_audio_file} already exist, skipping Demucs processing."
-        )
-        return
-
+@check_file_exists(lambda _, vocal_audio: vocal_audio)
+def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
     try:
         import torch
         from demucs.api import Separator
@@ -42,14 +38,15 @@ def demucs_audio(paths: OutputPaths) -> None:
                 callback_arg=None,
             )
 
-    os.makedirs(paths.audio_dir, exist_ok=True)
+    vocal_audio.parent.mkdir(parents=True, exist_ok=True)
 
     output.info("Loading Demucs model: htdemucs")
     model = get_model("htdemucs")
     separator = PreloadedSeparator(model=model)
 
     output.info("Separating vocals and background audio")
-    _, outputs = separator.separate_audio_file(str(paths.raw_audio_file))
+    _, outputs = separator.separate_audio_file(str(raw_audio))
+    output.info("separate_audio_file completed")
 
     kwargs = {
         "samplerate": model.samplerate,
@@ -60,11 +57,12 @@ def demucs_audio(paths: OutputPaths) -> None:
         "bits_per_sample": 16,
     }
 
-    save_audio(outputs["vocals"].cpu(), str(paths.vocal_audio_file), **kwargs)
-    background = sum(audio for source, audio in outputs.items() if source != "vocals")
-    save_audio(background.cpu(), str(paths.background_audio_file), **kwargs)
+    save_audio(outputs["vocals"].cpu(), str(vocal_audio), **kwargs)
+    output.info("save_audio completed")
 
-    del outputs, background, model, separator
+    del outputs, model, separator
     gc.collect()
 
     output.info("Demucs separation completed")
+    normalize_audio_volume(str(vocal_audio), str(vocal_audio), format="wav")
+

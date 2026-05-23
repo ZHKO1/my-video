@@ -39,13 +39,15 @@ def _resolve_file_path(file_path: PathResolver, *args, **kwargs) -> str:
     return os.fspath(resolved)
 
 
-def check_file_exists(file_path: PathResolver):
+def check_file_exists(*file_paths: PathResolver):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            resolved_path = _resolve_file_path(file_path, *args, **kwargs)
-            if os.path.exists(resolved_path):
-                output.warn(f"File <{resolved_path}> already exists, skip <{func.__name__}> step.")
+            resolved_paths = [_resolve_file_path(fp, *args, **kwargs) for fp in file_paths]
+
+            if all(os.path.exists(p) for p in resolved_paths):
+                targets = ", ".join(f"<{p}>" for p in resolved_paths)
+                output.warn(f"File {targets} already exists, skip <{func.__name__}> step.")
                 return None
             return func(*args, **kwargs)
 

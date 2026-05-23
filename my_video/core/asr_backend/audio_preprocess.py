@@ -1,3 +1,4 @@
+from pathlib import Path
 import os, subprocess
 from typing import List, Tuple
 
@@ -6,7 +7,8 @@ from pydub import AudioSegment
 from pydub.silence import detect_silence
 from pydub.utils import mediainfo
 
-from my_video.core.workspace import WorkspacePaths
+from my_video.core.utils.decorator import check_file_exists
+from my_video.core.utils.helper import read_json
 from my_video.cli import output
 
 def _ffmpeg_has_encoder(encoder_name: str) -> bool:
@@ -19,31 +21,20 @@ def _ffmpeg_has_encoder(encoder_name: str) -> bool:
     except Exception:
         return False
 
-def convert_video_to_audio(video_file: str, paths: WorkspacePaths):
-    os.makedirs(paths.audio_dir, exist_ok=True)
-    if not os.path.exists(paths.raw_audio_file):
-        output.info(f"Converting to high quality audio with FFmpeg ......")
-        if _ffmpeg_has_encoder('libmp3lame'):
-            cmd = [
-                'ffmpeg', '-y', '-i', video_file, '-vn',
-                '-c:a', 'libmp3lame', '-b:a', '32k',
-                '-ar', '16000', '-ac', '1',
-                '-metadata', 'encoding=UTF-8', str(paths.raw_audio_file)
-            ]
-        else:
-            # Fallback: conda-forge ffmpeg often lacks libmp3lame.
-            # Output as WAV (PCM) which all ffmpeg builds support.
-            # Downstream readers (pydub, librosa, whisperX) detect format by
-            # file header, not extension, so .mp3 path with WAV content works.
-            output.info("libmp3lame not found in ffmpeg, falling back to WAV (PCM) encoding")
-            cmd = [
-                'ffmpeg', '-y', '-i', video_file, '-vn',
-                '-c:a', 'pcm_s16le', '-ar', '16000', '-ac', '1',
-                '-f', 'wav', str(paths.raw_audio_file)
-            ]
-        subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
-        output.info(f"Converted <{video_file}> to <{paths.raw_audio_file}> with FFmpeg")
-
+@check_file_exists(lambda _, audio_path: audio_path)
+def convert_video_to_audio(video_path: str, audio_path: str):
+    audio_path = Path(audio_path)
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    output.info(f"Converting to high quality audio with FFmpeg ......")
+    if _ffmpeg_has_encoder('libmp3lame'):
+        cmd = [
+            'ffmpeg', '-y', '-i', video_path, '-vn',
+            '-c:a', 'libmp3lame', '-b:a', '32k',
+            '-ar', '16000', '-ac', '1',
+            '-metadata', 'encoding=UTF-8', str(audio_path)
+        ]
+    subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
+    output.info(f"Converted <{video_path}> to <{audio_path}> with FFmpeg")
 
 def normalize_audio_volume(
     audio_path: str,
@@ -60,13 +51,13 @@ def normalize_audio_volume(
 
 
 def split_audio(
-    audio_file: str,
+    audio_path: str,
     target_len: float = 30 * 60,
     win: float = 60,
 ) -> List[Tuple[float, float]]:
-    output.info(f"Starting audio segmentation: {audio_file}")
-    audio = AudioSegment.from_file(audio_file)
-    duration = float(mediainfo(audio_file)["duration"])
+    output.info(f"Starting audio segmentation: {audio_path}")
+    audio = AudioSegment.from_file(audio_path)
+    duration = float(mediainfo(audio_path)["duration"])
     if duration <= target_len + win:
         return [(0.0, duration)]
 
@@ -104,7 +95,7 @@ def split_audio(
             split_at = start + safe_margin
         else:
             output.warn(
-                f"No valid silence regions found for {audio_file} at {threshold:.1f}s, using threshold"
+                f"No valid silence regions found for {audio_path} at {threshold:.1f}s, using threshold"
             )
             split_at = threshold
 
@@ -115,77 +106,109 @@ def split_audio(
     return segments
 
 
-def process_transcription(result: dict) -> pd.DataFrame:
+def extract_words_dataframe(result: Path) -> pd.DataFrame:
+    loaded_result = read_json(result)
+    if loaded_result is None:
+        raise FileNotFoundError(f"WhisperX result JSON not found: {result}")
+    result = loaded_result
+
     all_words: list[dict] = []
     for segment in result["segments"]:
         speaker_id = segment.get("speaker_id")
         for word in segment.get("words", []):
-            text = word.get("word", "")
-            if len(text) > 30:
-                output.warn(f"Detected word longer than 30 characters, skipping: {text}")
-                continue
-            text = text.replace("»", "").replace("«", "")
-
-            if "start" not in word and "end" not in word:
-                if all_words:
-                    all_words.append(
-                        {
-                            "text": text,
-                            "start": all_words[-1]["end"],
-                            "end": all_words[-1]["end"],
-                            "speaker_id": speaker_id,
-                        }
-                    )
-                    continue
-                next_word = next(
-                    (candidate for candidate in segment.get("words", []) if "start" in candidate and "end" in candidate),
-                    None,
-                )
-                if next_word is None:
-                    raise ValueError(f"No timestamp found for word: {word}")
-                all_words.append(
-                    {
-                        "text": text,
-                        "start": next_word["start"],
-                        "end": next_word["end"],
-                        "speaker_id": speaker_id,
-                    }
-                )
-                continue
-
             all_words.append(
                 {
-                    "text": text,
-                    "start": word.get("start", all_words[-1]["end"] if all_words else 0),
-                    "end": word["end"],
+                    "text": word.get("word", ""),
+                    "start": word.get("start"),
+                    "end": word.get("end"),
                     "speaker_id": speaker_id,
                 }
             )
 
-    return pd.DataFrame(all_words)
+    return pd.DataFrame(all_words, columns=["text", "start", "end", "speaker_id"])
 
 
-def save_results(df: pd.DataFrame, paths: OutputPaths) -> None:
-    os.makedirs(paths.log_dir, exist_ok=True)
+def clean_words_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    required_columns = ["text", "start", "end", "speaker_id"]
+    missing_columns = [column for column in required_columns if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
 
-    initial_rows = len(df)
-    df = df[df["text"].str.len() > 0]
-    removed_rows = initial_rows - len(df)
+    cleaned_df = df.loc[:, required_columns].copy()
+    cleaned_df["text"] = cleaned_df["text"].fillna("").astype(str)
+    cleaned_df["text"] = cleaned_df["text"].str.replace("»", "", regex=False).str.replace("«", "", regex=False)
+
+    if cleaned_df.empty:
+        return cleaned_df.reset_index(drop=True)
+
+    next_valid_timestamp: tuple[float, float] | None = None
+    for _, row in cleaned_df.iterrows():
+        if pd.notna(row["start"]) and pd.notna(row["end"]):
+            next_valid_timestamp = (float(row["start"]), float(row["end"]))
+            break
+
+    if next_valid_timestamp is None:
+        raise ValueError("No timestamp found in words dataframe")
+
+    previous_end: float | None = None
+    normalized_rows: list[dict] = []
+    for row in cleaned_df.to_dict("records"):
+        start = row["start"]
+        end = row["end"]
+
+        has_start = pd.notna(start)
+        has_end = pd.notna(end)
+
+        if not has_start and not has_end:
+            if previous_end is not None:
+                start = previous_end
+                end = previous_end
+            else:
+                start, end = next_valid_timestamp
+        elif not has_start:
+            end = float(end)
+            start = previous_end if previous_end is not None else 0.0
+        elif not has_end:
+            start = float(start)
+            end = start
+        else:
+            start = float(start)
+            end = float(end)
+
+        previous_end = float(end)
+        normalized_rows.append(
+            {
+                "text": row["text"],
+                "start": float(start),
+                "end": float(end),
+                "speaker_id": row["speaker_id"],
+            }
+        )
+
+    normalized_df = pd.DataFrame(normalized_rows, columns=required_columns)
+
+    initial_rows = len(normalized_df)
+    normalized_df = normalized_df[normalized_df["text"].str.len() > 0].copy()
+    removed_rows = initial_rows - len(normalized_df)
     if removed_rows > 0:
         output.info(f"Removed {removed_rows} row(s) with empty text.")
 
-    long_words = df[df["text"].str.len() > 30]
+    long_words = normalized_df[normalized_df["text"].str.len() > 30]
     if not long_words.empty:
-        output.warn(f"Detected {len(long_words)} word(s) longer than 30 characters. These will be removed.")
-        df = df[df["text"].str.len() <= 30]
+        for text in long_words["text"]:
+            output.warn(f"Detected word longer than 30 characters, skipping: {text}")
+        normalized_df = normalized_df[normalized_df["text"].str.len() <= 30].copy()
 
-    df = df.copy()
-    df["text"] = df["text"].apply(lambda text: f'"{text}"')
-    df.to_excel(paths.cleaned_chunks, index=False)
-    output.info(f"Excel file saved to {paths.cleaned_chunks}")
+    return normalized_df.reset_index(drop=True)
+
+@check_file_exists(lambda _, output_path: output_path)
+def save_dataframe(df: pd.DataFrame, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_excel(output_path, index=False)
+    output.info(f"Excel file saved to {output_path}")
 
 
-def save_srt(segments: list[dict], output_path: str) -> None:
+def save_srt(segments: list[dict], output_path: Path) -> None:
     def _fmt(ts: float) -> str:
         total_ms = max(0, round(ts * 1000))
         hours, rem = divmod(total_ms, 3_600_000)
@@ -193,7 +216,7 @@ def save_srt(segments: list[dict], output_path: str) -> None:
         seconds, millis = divmod(rem, 1000)
         return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(str(output_path), "w", encoding="utf-8") as f:
         for index, segment in enumerate(segments, start=1):
             text = segment.get("text", "").strip()
             if not text:
@@ -202,4 +225,4 @@ def save_srt(segments: list[dict], output_path: str) -> None:
             f.write(f"{_fmt(segment['start'])} --> {_fmt(segment['end'])}\n")
             f.write(f"{text}\n\n")
 
-    output.info(f"Subtitle file saved to {output_path}")
+    output.info(f"Subtitle file saved to {str(output_path)}")

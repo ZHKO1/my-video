@@ -1,4 +1,5 @@
 import functools
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,6 +13,7 @@ from whisperx.audio import load_audio as whisperx_load_audio
 
 from my_video.cli import output
 from my_video.cli.config import get_toml_str
+from my_video.core.utils.decorator import check_file_exists
 
 
 warnings.filterwarnings("ignore")
@@ -66,26 +68,14 @@ def check_hf_mirror() -> str | None:
     output.info(f"Selected HuggingFace endpoint: {fastest_url}")
     return fastest_url
 
-
-def _load_audio_segment(audio_file: str, start: float, end: float):
-    # Use WhisperX's ffmpeg-based loader, then slice the requested segment in
-    # samples to keep ASR and alignment on the same time base.
-    full_audio = whisperx_load_audio(audio_file, sr=WHISPER_SAMPLE_RATE)
-    start_sample = int(start * WHISPER_SAMPLE_RATE)
-    end_sample = int(end * WHISPER_SAMPLE_RATE)
-    return full_audio[start_sample:end_sample]
-
-
-def transcribe_audio(
-    raw_audio_file: str,
-    vocal_audio_file: str,
-    start: float,
-    end: float,
-    config: dict,
-) -> dict:
-    whisper_language = get_toml_str(config, "transcribe.whisperx.language", default="auto") or "auto"
-    model_name = get_toml_str(config, "transcribe.whisperx.model", default="large-v3") or "large-v3"
-    model_dir = get_toml_str(config, "transcribe.whisperx.model_dir")
+@check_file_exists(lambda _, whisperx_json, *_args, **_kwargs: whisperx_json)
+def whisperx_audio(
+    audio_file: Path,
+    whisperx_json: Path,
+    whisper_language: str,
+    model_name: str,
+    model_dir = str | None,
+):
     hf_endpoint = check_hf_mirror()
     if hf_endpoint:
         os.environ["HF_ENDPOINT"] = hf_endpoint
@@ -110,7 +100,7 @@ def transcribe_audio(
             model_ref = str(candidate)
 
     language = None if whisper_language == "auto" else whisper_language
-    output.info(f"Starting WhisperX for segment {start:.2f}s to {end:.2f}s")
+    output.info(f"Starting WhisperX")
     model = whisperx.load_model(
         model_ref,
         device,
@@ -121,10 +111,9 @@ def transcribe_audio(
         download_root=model_dir,
     )
 
-    raw_audio_segment = _load_audio_segment(raw_audio_file, start, end)
-    vocal_audio_segment = _load_audio_segment(vocal_audio_file, start, end)
+    full_audio = whisperx_load_audio(str(audio_file), sr=WHISPER_SAMPLE_RATE)
 
-    result = model.transcribe(raw_audio_segment, batch_size=batch_size, print_progress=False)
+    result = model.transcribe(full_audio, batch_size=batch_size, print_progress=True)
 
     del model
     if torch.cuda.is_available():
@@ -136,22 +125,18 @@ def transcribe_audio(
         result["segments"],
         model_a,
         metadata,
-        vocal_audio_segment,
+        full_audio,
         device,
         return_char_alignments=False,
+        print_progress=True
     )
 
     del model_a
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    for segment in result["segments"]:
-        segment["start"] += start
-        segment["end"] += start
-        for word in segment.get("words", []):
-            if "start" in word:
-                word["start"] += start
-            if "end" in word:
-                word["end"] += start
-
-    return result
+    whisperx_json.parent.mkdir(parents=True, exist_ok=True)
+    whisperx_json.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )

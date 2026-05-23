@@ -2,7 +2,7 @@ work_dir = "~/work/my-video"
 
 [download]
 cookie_path = "./cookies.txt"
-proxy = "socks5://192.168.71.5:20170/"
+proxy = "socks5://192.168.3.6:2222/"
 
 [transcribe]
 demucs = true

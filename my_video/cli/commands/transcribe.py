@@ -2,20 +2,23 @@
 
 from argparse import Namespace
 from pathlib import Path
+import traceback
 
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
-from my_video.cli.config import get_toml_value
+from my_video.cli.config import get_toml_str, get_toml_value
 from my_video.core.asr_backend.audio_preprocess import (
+    clean_words_dataframe,
     convert_video_to_audio,
+    extract_words_dataframe,
     normalize_audio_volume,
-    process_transcription,
-    save_results,
+    save_dataframe,
     save_srt,
     split_audio,
 )
-from my_video.core.asr_backend.demucs_vl import demucs_audio
-from my_video.core.asr_backend.whisperx_local import transcribe_audio as transcribe_local_audio
+from my_video.core.asr_backend.demucs import demucs_audio
+from my_video.core.asr_backend.hallucination import format_hallucination_report, scan_whisperx_hallucinations
+from my_video.core.asr_backend.whisperx_local import whisperx_audio
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
 
@@ -36,47 +39,49 @@ def run(args: Namespace, config: dict) -> int:
     if not video_path:
         output.error(f"origin.video_path missing in status.json: {status_path}")
         return EXIT.RUNTIME_ERROR
-    if not video_path.exists():
+    if not Path(video_path).exists():
         output.error(f"Video file not found: {video_path}")
         return EXIT.FILE_NOT_FOUND
 
     paths = build_workspace_paths(workspace_path)
-    output_path = str(paths.src_srt)
+    if paths.transcribe_srt.exists():
+        output.success(f"{str(paths.transcribe_srt)} is existed")
+        return EXIT.SUCCESS
 
     try:
+        input_audio = paths.raw_audio
+
         # 1. video to audio
-        convert_video_to_audio(video_path, paths)
+        convert_video_to_audio(video_path, str(paths.raw_audio))
 
         # 2. Demucs vocal separation:
         if get_toml_value(config, "transcribe.demucs", False):
-            demucs_audio(paths)
-            vocal_audio = normalize_audio_volume(str(paths.vocal_audio_file), str(paths.vocal_audio_file), format="mp3")
-        else:
-            vocal_audio = str(paths.raw_audio_file)
+            demucs_audio(paths.raw_audio, paths.vocal_audio)
+            input_audio = paths.vocal_audio
+    
+        # 3. Transcribe audio
+        whisper_language = get_toml_str(config, "transcribe.whisperx.language", default="en")
+        model_name = get_toml_str(config, "transcribe.whisperx.model", default="large-v3-turbo")
+        model_dir = get_toml_str(config, "transcribe.whisperx.model_dir")
+        whisperx_audio(input_audio, paths.whisperx_json, whisper_language, model_name, model_dir)
 
-        # 3. Extract audio
-        segments = split_audio(str(paths.raw_audio_file))
-        
-        # 4. Transcribe audio by clips
-        all_results = []
-        output.info("Transcribing audio with local WhisperX model")
+        hallucination_result = scan_whisperx_hallucinations(paths.whisperx_json)
+        if hallucination_result.has_hallucination:
+            output.error(format_hallucination_report(hallucination_result, max_examples=5))
+            raise RuntimeError(f"WhisperX hallucination detected in {paths.whisperx_json}")
 
-        for index, (start, end) in enumerate(segments, start=1):
-            callback(int(index * 100 / max(len(segments), 1)), f"segment {index}/{len(segments)}")
-            result = transcribe_local_audio(str(paths.raw_audio_file), vocal_audio, start, end, config)
-            all_results.append(result)
-       
-        # 5. Combine results
-        combined_result = {'segments': []}
-        for result in all_results:
-            combined_result['segments'].extend(result['segments'])
-        
-        # 6. Process df
-        df = process_transcription(combined_result)
-        save_results(df, paths)
-        save_srt(combined_result["segments"], output_path)
+        raw_df = extract_words_dataframe(paths.whisperx_json)
+        save_dataframe(raw_df, paths.word_timestamps)
+
+        cleaned_df = clean_words_dataframe(raw_df)
+        save_dataframe(cleaned_df, paths.cleaned_word_timestamps)
+
+        segments = cleaned_df.to_dict("records")
+        save_srt(segments, str(paths.transcribe_srt))
+
         return EXIT.SUCCESS
 
     except Exception as e:
         output.error(e)
+        output.error(traceback.format_exc())
         return EXIT.RUNTIME_ERROR
