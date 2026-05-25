@@ -7,7 +7,7 @@ import traceback
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
 from my_video.cli.config import get_toml_str, get_toml_value
-from my_video.core.asr_backend.audio_preprocess import (
+from my_video.core.asr.audio_preprocess import (
     clean_words_dataframe,
     convert_video_to_audio,
     extract_words_dataframe,
@@ -16,9 +16,9 @@ from my_video.core.asr_backend.audio_preprocess import (
     save_srt,
     split_audio,
 )
-from my_video.core.asr_backend.demucs import demucs_audio
-from my_video.core.asr_backend.hallucination import format_hallucination_report, scan_whisperx_hallucinations
-from my_video.core.asr_backend.whisperx_local import whisperx_audio
+from my_video.core.asr.demucs import demucs_audio
+from my_video.core.asr.hallucination import format_hallucination_report, scan_whisperx_hallucinations
+from my_video.core.asr.whisperx_local import whisperx_audio
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
 

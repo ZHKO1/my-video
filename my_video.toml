@@ -1,8 +1,11 @@
 work_dir = "~/work/my-video"
 
+[llm]
+model = "deepseek-v4-pro"
+
 [download]
 cookie_path = "./cookies.txt"
-proxy = "socks5://192.168.3.6:2222/"
+proxy = "socks5://192.168.71.5:20170/"
 
 [transcribe]
 demucs = true
@@ -13,6 +16,12 @@ model = "large-v3"
 model_dir = ""
 
 [subtitle]
+thread_num = 4
+batch_size = 20
+max_word_count_english = 12
+max_word_count_cjk = 18
+need_reflect = true
+
 target_language = "zh"
 split_by_meaning = true
 generate_summary = true
@@ -23,11 +32,7 @@ summary_length = 8000
 max_length = 75
 target_multiplier = 1.0
 
-[subtitle.translate.api]
-key = "sk-e4b3998282714334a6d486f8781bec72"
-base_url = "https://api.deepseek.com"
-model = "deepseek-v4-flash"
-llm_support_json = true
+
 
 [subtitle.translate]
 chunk_size = 600

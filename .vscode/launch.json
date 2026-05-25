@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "my_video subtitle",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "cwd": "${workspaceFolder}",
+            "module": "my_video",
+            "args": [
+                "subtitle",
+                "/home/zhko1/work/my-video/3DS Repair _ How to fix a dead New 3DS XL (Not turning on, No power)/"
+            ],
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "justMyCode": false
+        },
+        {
+            "name": "my_video synthesize",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "cwd": "${workspaceFolder}",
+            "module": "my_video",
+            "args": [
+                "synthesize",
+                "/home/zhko1/work/my-video/3DS Repair _ How to fix a dead New 3DS XL (Not turning on, No power)/"
+            ],
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "justMyCode": false
+        }
+    ]
+}

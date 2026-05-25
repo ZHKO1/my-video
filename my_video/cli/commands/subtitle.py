@@ -6,6 +6,7 @@ import math
 from argparse import Namespace
 from difflib import SequenceMatcher
 from pathlib import Path
+import traceback
 from typing import List, Tuple
 
 import autocorrect_py as autocorrect
@@ -15,7 +16,8 @@ from my_video.core.utils import except_handler
 from my_video.cli import output
 from my_video.cli import exit_codes as EXIT
 from my_video.cli.config import get_toml_str, get_toml_value, get_work_dir
-from my_video.core.prompts import get_align_prompt, get_split_prompt, get_summary_prompt
+from my_video.core.prompts_old import get_align_prompt, get_split_prompt, get_summary_prompt
+from my_video.core.entities import SubtitleLayoutEnum
 from my_video.core.subtitle_alignment import align_timestamp
 from my_video.core.subtitle_trim import check_len_then_trim
 from my_video.core.spacy_utils.load_nlp_model import resolve_spacy_language
@@ -29,6 +31,7 @@ from my_video.core.spacy_utils import (
 from my_video.core.translate_lines import translate_lines
 from my_video.core.utils import ask_gpt, check_file_exists, get_joiner
 from my_video.core.utils.models import OutputPaths, build_output_paths
+from my_video.core.workspace import build_workspace_paths
 
 SUBTITLE_OUTPUT_CONFIGS = [
     ("src.srt", ["Source"]),
@@ -521,26 +524,72 @@ def align_timestamp_main(paths: OutputPaths):
 
 
 def run(args: Namespace, config: dict) -> int:
-    work_dir = get_work_dir(config) or "."
-    paths = build_output_paths(work_dir)
-    paths.output_dir.mkdir(parents=True, exist_ok=True)
-    paths.log_dir.mkdir(parents=True, exist_ok=True)
+    workspace_path = Path(args.workspace_path).expanduser()
+    if not workspace_path.is_dir():
+        output.error(f"Workspace not found: {workspace_path}")
+        return EXIT.FILE_NOT_FOUND
+
+    paths = build_workspace_paths(workspace_path)
+    if paths.src_srt.exists() and paths.trans_srt.exists():
+        output.success(f"{paths.src_srt} and {paths.trans_srt} already exist")
+        return EXIT.SUCCESS
+
+    if not paths.transcribe_srt.exists():
+        output.error(f"Transcribe srt not found: {str(paths.transcribe_srt)}")
+        return EXIT.FILE_NOT_FOUND
+
+    from my_video.core.asr.asr_data import ASRData
+    asr_data = ASRData.from_subtitle_file(str(paths.transcribe_srt))
+    output.info(f"{asr_data}")
 
     try:
-        split_by_spacy(paths)
-        if get_toml_value(config, "subtitle.split_by_meaning", False):
-            split_sentences_by_meaning(paths, config)
-        if get_toml_value(config, "subtitle.generate_summary", False):
-            get_summary(paths, config)
-        
-        translate_all(paths, config)
-        if get_toml_value(config, "subtitle.split_for_sub", False):
-            split_for_sub_main(paths, config)
+        from my_video.core.split.split import SubtitleSplitter
+        thread_num = get_toml_value(config, "subtitle.thread_num", 4)
+        batch_size = get_toml_value(config, "subtitle.batch_size", 20)
+        llm_model = get_toml_value(config, "llm.model", "deepseek-v4-pro")
+        max_cjk = get_toml_value(config, "subtitle.max_word_count_cjk", 12)
+        max_english = get_toml_value(config, "subtitle.max_word_count_english", 18)
+        need_reflect = get_toml_value(config, "subtitle.need_reflect", True)
 
-        align_timestamp_main(paths)
+        # thread_num = 1 # 待删除
+
+        splitter = SubtitleSplitter(
+            thread_num=thread_num,
+            model=llm_model,
+            max_word_count_cjk=max_cjk,
+            max_word_count_english=max_english,
+        )
+        asr_data = splitter.split_subtitle(asr_data)
+        
+        from my_video.core.optimize.optimize import SubtitleOptimizer
+        optimizer = SubtitleOptimizer(
+            thread_num=thread_num,
+            batch_num=batch_size,
+            model=llm_model,
+            custom_prompt=""
+        )
+        asr_data = optimizer.optimize_subtitle(asr_data)
+        asr_data.remove_punctuation()
+        
+        from my_video.core.translate.factory import TranslatorFactory
+
+        translator = TranslatorFactory.create_translator(
+            thread_num=thread_num,
+            batch_num=batch_size,
+            model=llm_model,
+            custom_prompt="",
+            is_reflect=need_reflect,
+        )
+        asr_data = translator.translate_subtitle(asr_data)
+        asr_data.remove_punctuation()
+
+        asr_data.to_srt(paths.src_srt, layout=SubtitleLayoutEnum.ONLY_ORIGINAL)
+        asr_data.to_srt(paths.trans_srt, layout=SubtitleLayoutEnum.ONLY_TRANSLATE)
+        output.success(f"Subtitle files saved to {paths.src_srt} and {paths.trans_srt}")
+        return EXIT.SUCCESS
+
 
     except Exception as e:
-        output.error(str(e))
+        output.error(e)
+        output.error(traceback.format_exc())
         return EXIT.RUNTIME_ERROR
-
-    return EXIT.SUCCESS

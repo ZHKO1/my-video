@@ -46,8 +46,7 @@ def _build_subtitle_parser(subparsers) -> None:
         help="Optimize and/or translate subtitle files",
         description="Process subtitle files with a lightweight placeholder pipeline.",
     )
-    p.add_argument("input", help="Subtitle file path")
-
+    p.add_argument("workspace_path", help="Workspace directory path")
     p.set_defaults(func=_run_subtitle)
 
 def _build_synthesize_parser(subparsers) -> None:
@@ -56,8 +55,7 @@ def _build_synthesize_parser(subparsers) -> None:
         help="Burn subtitles into video",
         description="Render a video with subtitles using a lightweight placeholder pipeline.",
     )
-    p.add_argument("input", help="Video file path")
-    p.add_argument("--output", help="Output video path")
+    p.add_argument("workspace_path", help="Workspace directory path")
 
     p.set_defaults(func=_run_synthesize)
 

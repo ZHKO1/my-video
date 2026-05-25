@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 from my_video.cli import output
-from my_video.core.asr_backend.audio_preprocess import normalize_audio_volume
+from my_video.core.asr.audio_preprocess import normalize_audio_volume
 from my_video.core.utils.decorator import check_file_exists
 
 @check_file_exists(lambda _, vocal_audio: vocal_audio)

@@ -1,6 +1,6 @@
 from my_video.cli import output
 from my_video.cli.config import get_toml_value, load_toml_config
-from my_video.core.prompts import (
+from my_video.core.prompts_old import (
     generate_shared_prompt,
     get_prompt_expressiveness,
     get_prompt_faithfulness,

@@ -6,8 +6,8 @@ import sys
 
 import pandas as pd
 
-from my_video.core.asr_backend.audio_preprocess import clean_words_dataframe, extract_words_dataframe
-from my_video.core.asr_backend.hallucination import (
+from my_video.core.asr.audio_preprocess import clean_words_dataframe, extract_words_dataframe
+from my_video.core.asr.hallucination import (
     Token,
     format_hallucination_report,
     scan_repeated_runs,

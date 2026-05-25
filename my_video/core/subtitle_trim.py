@@ -2,7 +2,7 @@ import re
 
 from my_video.cli import output
 from my_video.cli.config import get_toml_str, get_toml_value, load_toml_config
-from my_video.core.prompts import get_subtitle_trim_prompt
+from my_video.core.prompts_old import get_subtitle_trim_prompt
 from my_video.core.utils import ask_gpt
 
 

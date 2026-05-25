@@ -1,17 +1,19 @@
 """synthesize command — burn generated subtitles into a video."""
 
-import subprocess
-import time
+from __future__ import annotations
+
 from argparse import Namespace
 from pathlib import Path
+import subprocess
+import time
 
 import cv2
-import numpy as np
 
 from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
-from my_video.cli.config import get_toml_value, get_work_dir
-from my_video.core.utils.models import OutputPaths, build_output_paths
+from my_video.cli.config import get_toml_value
+from my_video.core.utils.helper import read_json
+from my_video.core.workspace import build_workspace_paths
 
 SRC_FONT_SIZE = 15
 TRANS_FONT_SIZE = 17
@@ -42,21 +44,18 @@ def _escape_subtitle_path(path: Path) -> str:
     return str(path.resolve()).replace("\\", "\\\\").replace(":", "\\:").replace("'", r"\'")
 
 
-def _default_output_path(input_path: Path, paths: OutputPaths) -> Path:
-    return paths.output_dir / "output_sub.mp4"
-
-
 def merge_subtitles_to_video(
     video_file: Path,
-    paths: OutputPaths,
+    src_srt_path: Path,
+    trans_srt_path: Path,
     output_path: Path,
-    config: dict,
+    ffmpeg_gpu: bool,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if not paths.src_srt.exists() or not paths.trans_srt.exists():
+    if not src_srt_path.exists() or not trans_srt_path.exists():
         raise FileNotFoundError(
-            f"Subtitle files not found under {paths.output_dir}: expected {paths.src_srt.name} and {paths.trans_srt.name}"
+            f"Subtitle files not found: expected {src_srt_path} and {trans_srt_path}"
         )
 
     video = cv2.VideoCapture(str(video_file))
@@ -69,8 +68,8 @@ def merge_subtitles_to_video(
 
     output.info(f"Video resolution: {target_width}x{target_height}")
 
-    src_srt = _escape_subtitle_path(paths.src_srt)
-    trans_srt = _escape_subtitle_path(paths.trans_srt)
+    src_srt = _escape_subtitle_path(src_srt_path)
+    trans_srt = _escape_subtitle_path(trans_srt_path)
     font_dir = _escape_subtitle_path(Path(FONT_DIR_PATH))
     src_style = (
         f"FontSize={SRC_FONT_SIZE},FontName={FONT_NAME},"
@@ -97,7 +96,6 @@ def merge_subtitles_to_video(
         filter_graph,
     ]
 
-    ffmpeg_gpu = bool(get_toml_value(config, "synthesize.ffmpeg_gpu", False))
     if ffmpeg_gpu:
         if check_gpu_available():
             output.info("Using GPU acceleration via h264_nvenc")
@@ -125,19 +123,39 @@ def merge_subtitles_to_video(
 
 
 def run(args: Namespace, config: dict) -> int:
-    input_path = Path(args.input)
-    if not input_path.exists():
-        output.error(f"Input video not found: {input_path}")
+    workspace_path = Path(args.workspace_path).expanduser()
+    if not workspace_path.is_dir():
+        output.error(f"Workspace not found: {workspace_path}")
         return EXIT.FILE_NOT_FOUND
 
-    work_dir = get_work_dir(config) or "."
-    paths = build_output_paths(work_dir)
-    paths.output_dir.mkdir(parents=True, exist_ok=True)
+    status_path = workspace_path / "status.json"
+    status = read_json(status_path)
+    if status is None:
+        output.error(f"status.json not found: {status_path}")
+        return EXIT.FILE_NOT_FOUND
 
-    output_path = Path(args.output) if args.output else _default_output_path(input_path, paths)
+    origin = status.get("origin")
+    video_path = origin.get("video_path") if isinstance(origin, dict) else None
+    if not video_path:
+        output.error(f"origin.video_path missing in status.json: {status_path}")
+        return EXIT.RUNTIME_ERROR
+
+    input_path = Path(video_path).expanduser()
+    if not input_path.exists():
+        output.error(f"Video file not found: {input_path}")
+        return EXIT.FILE_NOT_FOUND
+
+    paths = build_workspace_paths(workspace_path)
+    ffmpeg_gpu = bool(get_toml_value(config, "synthesize.ffmpeg_gpu", False))
 
     try:
-        merge_subtitles_to_video(input_path, paths, output_path, config)
+        merge_subtitles_to_video(
+            input_path,
+            paths.src_srt,
+            paths.trans_srt,
+            paths.output_mp4,
+            ffmpeg_gpu,
+        )
     except Exception as exc:
         output.error(str(exc))
         return EXIT.RUNTIME_ERROR

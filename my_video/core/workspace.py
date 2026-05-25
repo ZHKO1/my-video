@@ -22,6 +22,7 @@ class WorkspacePaths:
     # base dirs
     base_dir: Path
     transcribe_dir: Path
+    subtitle_dir: Path
     
     raw_audio: Path
     vocal_audio: Path
@@ -29,73 +30,31 @@ class WorkspacePaths:
     word_timestamps: Path
     cleaned_word_timestamps: Path
     transcribe_srt: Path
+    src_srt: Path
+    trans_srt: Path
+    output_mp4: Path
 
-    # cleaned_chunks: Path
-    # src_srt: Path
-
-    # intermediate files retained as commented placeholders during migration
-    # split_by_mark: Path
-    # split_by_comma: Path
-    # split_by_connector: Path
-    # split_by_nlp: Path
-    # split_by_meaning: Path
-    # terminology: Path
-    # translation: Path
-    # split_sub: Path
-    # remerged: Path
-    # src_srt: Path
-    # trans_srt: Path
-    # src_trans_srt: Path
-    # trans_src_srt: Path
-    # src_subs_for_audio_srt: Path
-    # trans_subs_for_audio_srt: Path
-
-    # # audio files
-    # audio_task: Path
-    # raw_audio_file: Path
-    # vocal_audio_file: Path
-    # background_audio_file: Path
 
 
 def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
     base = Path(workspace_path).expanduser().resolve()
     transcribe_dir = base / "transcribe"
-
-    log_dir = base / "log"
-    audio_dir = base / "audio"
+    subtitle_dir = base / "subtitle"
 
     return WorkspacePaths(
         base_dir=base,
         transcribe_dir=transcribe_dir,
+        subtitle_dir=subtitle_dir,
 
         raw_audio=transcribe_dir / "raw.mp3",
         vocal_audio=transcribe_dir / "vocal.mp3",
         whisperx_json=transcribe_dir / "whisperx.json",
         word_timestamps=transcribe_dir / "word_timestamps.xlsx",
         cleaned_word_timestamps=transcribe_dir / "cleaned_word_timestamps.xlsx",
-        transcribe_srt=transcribe_dir / "transcribe.srt"
-        
-        # cleaned_chunks=log_dir / "cleaned_chunks.xlsx",
-        # src_srt=base / "src.srt",
-
-        # split_by_mark=log_dir / "split_by_mark.txt",
-        # split_by_comma=log_dir / "split_by_comma.txt",
-        # split_by_connector=log_dir / "split_by_connector.txt",
-        # split_by_nlp=log_dir / "split_by_nlp.txt",
-        # split_by_meaning=log_dir / "split_by_meaning.txt",
-        # terminology=log_dir / "terminology.json",
-        # translation=log_dir / "translation_results.xlsx",
-        # split_sub=log_dir / "translation_results_for_subtitles.xlsx",
-        # remerged=log_dir / "translation_results_remerged.xlsx",
-        # trans_srt=base / "trans.srt",
-        # src_trans_srt=base / "src_trans.srt",
-        # trans_src_srt=base / "trans_src.srt",
-        # src_subs_for_audio_srt=audio_dir / "src_subs_for_audio.srt",
-        # trans_subs_for_audio_srt=audio_dir / "trans_subs_for_audio.srt",
-        # audio_task=audio_dir / "tts_tasks.xlsx",
-        # raw_audio_file=audio_dir / "raw.mp3",
-        # vocal_audio_file=audio_dir / "vocal.mp3",
-        # background_audio_file=audio_dir / "background.mp3",
+        transcribe_srt=transcribe_dir / "transcribe.srt",
+        src_srt= subtitle_dir / "src.srt",
+        trans_srt= subtitle_dir / "trans.srt",
+        output_mp4=base/ "output.mp4"
     )
 
 
