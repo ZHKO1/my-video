@@ -40,4 +40,4 @@ max_lines_per_chunk = 10
 min_trim_duration = 3.5
 
 [synthesize]
-ffmpeg_gpu = false
+ffmpeg_gpu = true

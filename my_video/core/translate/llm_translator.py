@@ -38,6 +38,16 @@ class LLMTranslator(BaseTranslator):
         self.custom_prompt = custom_prompt
         self.is_reflect = is_reflect
 
+    def _get_translate_prompt_info(self) -> Tuple[str, str]:
+        """获取当前翻译模式对应的 prompt 路径和最终 prompt 内容"""
+        prompt_path = "translate/reflect" if self.is_reflect else "translate/standard"
+        prompt = get_prompt(
+            prompt_path,
+            target_language=self.target_language,
+            custom_prompt=self.custom_prompt,
+        )
+        return prompt_path, prompt
+
     def _translate_chunk(
         self, subtitle_chunk: List[SubtitleProcessData]
     ) -> List[SubtitleProcessData]:
@@ -50,18 +60,7 @@ class LLMTranslator(BaseTranslator):
         subtitle_dict = {str(data.index): data.original_text for data in subtitle_chunk}
 
         # 获取提示词
-        if self.is_reflect:
-            prompt = get_prompt(
-                "translate/reflect",
-                target_language=self.target_language,
-                custom_prompt=self.custom_prompt,
-            )
-        else:
-            prompt = get_prompt(
-                "translate/standard",
-                target_language=self.target_language,
-                custom_prompt=self.custom_prompt,
-            )
+        _, prompt = self._get_translate_prompt_info()
 
         try:
             # 使用agent loop进行翻译，自动验证和修正
@@ -218,4 +217,11 @@ class LLMTranslator(BaseTranslator):
         chunk_key = generate_cache_key(chunk)
         lang = self.target_language.value
         model = self.model
-        return f"{class_name}:{chunk_key}:{lang}:{model}"
+        prompt_path, prompt = self._get_translate_prompt_info()
+        prompt_key = generate_cache_key(
+            {
+                "prompt_path": prompt_path,
+                "prompt": prompt,
+            }
+        )
+        return f"{class_name}:{chunk_key}:{lang}:{model}:{prompt_key}"
