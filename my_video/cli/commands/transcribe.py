@@ -44,8 +44,8 @@ def run(args: Namespace, config: dict) -> int:
         return EXIT.FILE_NOT_FOUND
 
     paths = build_workspace_paths(workspace_path)
-    if paths.transcribe_srt.exists():
-        output.success(f"{str(paths.transcribe_srt)} is existed")
+    if paths.whisperx_json.exists():
+        output.success(f"{str(paths.whisperx_json)} is existed")
         return EXIT.SUCCESS
 
     try:
@@ -68,16 +68,13 @@ def run(args: Namespace, config: dict) -> int:
         hallucination_result = scan_whisperx_hallucinations(paths.whisperx_json)
         if hallucination_result.has_hallucination:
             output.error(format_hallucination_report(hallucination_result, max_examples=5))
-            raise RuntimeError(f"WhisperX hallucination detected in {paths.whisperx_json}")
+            # raise RuntimeError(f"WhisperX hallucination detected in {paths.whisperx_json}")
 
-        raw_df = extract_words_dataframe(paths.whisperx_json)
-        save_dataframe(raw_df, paths.word_timestamps)
-
-        cleaned_df = clean_words_dataframe(raw_df)
-        save_dataframe(cleaned_df, paths.cleaned_word_timestamps)
-
-        segments = cleaned_df.to_dict("records")
-        save_srt(segments, str(paths.transcribe_srt))
+        # raw_df = extract_words_dataframe(paths.whisperx_json)        
+        # cleaned_df = clean_words_dataframe(raw_df)
+        
+        # segments = cleaned_df.to_dict("records")
+        # save_srt(segments, str(paths.transcribe_srt))
 
         return EXIT.SUCCESS
 

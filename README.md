@@ -90,23 +90,21 @@ bash scripts/install_demucs_uv.sh
 
 ## download 配置
 
-`my_video` 会读取全局工作目录与 `yt-dlp` 额外参数：
+`my_video` 会读取全局工作目录与 yt-dlp 运行参数：
 
 1. 读取当前目录下默认文件 `my_video.toml`。
 2. 文件不存在时会忽略并继续下载。
 
 - `work_dir`：全局工作目录，可选，支持 `~`
-- `[download.yt-dlp.common].extra_args`：追加给 `yt-dlp` 的字符串数组
+- `download.cookie_path`：cookie 文件路径，可选
+- `download.proxy`：代理地址，可选
 
 ```toml
 work_dir = "~/work/my-video"
 
-[download.yt-dlp.common]
-extra_args = [
-  "--cookies", "./cookies.txt",
-  "--proxy", "socks5://192.168.71.5:20170/",
-  "--remote-components", "ejs:github"
-]
+[download]
+cookie_path = "./cookies.txt"
+proxy = "socks5://192.168.71.5:20170/"
 ```
 
 `work_dir` 为统一工作目录，所有产物都写入该目录。
@@ -137,16 +135,21 @@ model_dir = ""
 
 ## download 行为
 
-`my_video download` 的执行顺序：
+`my_video download <url>` 的执行流程：
 
-1. 先下载 `video+audio`，格式选择 `bestvideo+bestaudio/best`，并通过 `--print after_move:filepath` 获取最终视频路径。
-2. 再下载字幕，使用 `--skip-download --write-subs --convert-subs srt`，字幕目标文件名基于视频文件名生成。
+1. 通过 yt-dlp 获取视频元信息（标题、ID 等），写入 `<workspace>/info.json`。
+2. 基于视频标题创建 workspace 目录：`<work_dir>/<SanitizedTitle>/`。
+3. 一次性下载视频、字幕、缩略图到 `<workspace>/origin/`：
+   - **视频**：最大 1080p，格式 `(bestvideo[height<=1080]+bestaudio/best[height<=1080])`，输出为 `video.<ext>`
+   - **字幕**：仅英文字幕（`en.*`），自动字幕不下载（`writeautomaticsub: False`），输出为 `subtitle.<ext>`
+   - **缩略图**：输出为 `thumb.jpg`
+4. 下载结果写入 `<workspace>/status.json`。
 
 规则：
 
 - 视频下载失败：命令直接失败
-- 字幕下载失败：只打印 warning，不影响整体成功
-- 字幕路径判定：匹配与目标字幕名前缀一致的 `.srt` 文件，命中后作为字幕路径输出
+- 字幕或缩略图未找到：打印 info 提示，不影响整体成功
+- 不支持播放列表（`noplaylist: True`）
 
 ## transcribe 用法
 

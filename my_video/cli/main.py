@@ -27,7 +27,7 @@ def _build_download_parser(subparsers) -> None:
         description="Download video from YouTube, Bilibili, and other sites supported by yt-dlp.",
     )
     p.add_argument("url", help="Video URL")
-    p.add_argument("--force", action="store_true", help="Overwrite an existing failed or running workspace")
+
     p.set_defaults(func=_run_download)
 
 def _build_transcribe_parser(subparsers) -> None:

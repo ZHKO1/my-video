@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from my_video.core.utils.helper import read_json
 
 
 _BEIJING_TZ = ZoneInfo("Asia/Shanghai")
@@ -23,7 +22,11 @@ class WorkspacePaths:
     base_dir: Path
     transcribe_dir: Path
     subtitle_dir: Path
-    
+
+    origin_dir: Path
+    info_path: Path
+    status_path: Path
+
     raw_audio: Path
     vocal_audio: Path
     whisperx_json: Path
@@ -34,8 +37,6 @@ class WorkspacePaths:
     trans_srt: Path
     output_mp4: Path
 
-
-
 def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
     base = Path(workspace_path).expanduser().resolve()
     transcribe_dir = base / "transcribe"
@@ -45,7 +46,10 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         base_dir=base,
         transcribe_dir=transcribe_dir,
         subtitle_dir=subtitle_dir,
+        origin_dir=base / "origin",
 
+        info_path=base / "info.json",
+        status_path=base / "status.json",
         raw_audio=transcribe_dir / "raw.mp3",
         vocal_audio=transcribe_dir / "vocal.mp3",
         whisperx_json=transcribe_dir / "whisperx.json",
@@ -54,7 +58,8 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         transcribe_srt=transcribe_dir / "transcribe.srt",
         src_srt= subtitle_dir / "src.srt",
         trans_srt= subtitle_dir / "trans.srt",
-        output_mp4=base/ "output.mp4"
+        output_mp4=base/ "output.mp4",
+
     )
 
 
@@ -122,6 +127,7 @@ def update_status_for_workspace(
 
     path = Path(status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    from my_video.core.utils.helper import read_json
     current = {} if full_update else (read_json(path) or {})
     payload = dict(updates) if full_update else _merge_dicts(current, updates)
     payload["last_time"] = format_beijing_time()

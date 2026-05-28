@@ -9,13 +9,12 @@ from typing import Any
 import yt_dlp
 
 from my_video.cli import output
-from my_video.core.workspace import update_status_for_workspace
 
 
 @dataclass(frozen=True)
 class DownloadRequest:
     url: str
-    workspace_path: str | Path
+    origin_dir: str | Path
     cookie_path: str | Path | None = None
     proxy: str | None = None
 
@@ -76,40 +75,8 @@ def fetch_video_info(
     return info
 
 
-def _reset_status_for_download(status_path: Path, info_path: Path) -> None:
-    update_status_for_workspace(
-        status_path,
-        {
-            "stage": "download",
-            "status": "running",
-            "failed_reason": None,
-            "info_path": str(info_path.resolve()),
-            "origin": {
-                "video_path": None,
-                "subtitle_path": None,
-                "thumbnail_path": None,
-            },
-        },
-        full_update=True,
-    )
-
-
-def _record_origin_paths(status_path: Path, result: DownloadResult) -> None:
-    if result.video_path:
-        update_status_for_workspace(status_path, {"origin": {"video_path": result.video_path}})
-    if result.subtitle_path:
-        update_status_for_workspace(status_path, {"origin": {"subtitle_path": result.subtitle_path}})
-    if result.thumbnail_path:
-        update_status_for_workspace(status_path, {"origin": {"thumbnail_path": result.thumbnail_path}})
-
-
 def download(request: DownloadRequest) -> DownloadResult:
-    workspace_path = Path(request.workspace_path).expanduser().resolve()
-    info_path = workspace_path / "info.json"
-    status_path = workspace_path / "status.json"
-    origin_path = workspace_path / "origin"
-
-    _reset_status_for_download(status_path, info_path)
+    origin_path = Path(request.origin_dir).expanduser().resolve()
 
     try:
         origin_path.mkdir(parents=False, exist_ok=False)
@@ -148,7 +115,6 @@ def download(request: DownloadRequest) -> DownloadResult:
             ydl.extract_info(request.url, download=True)
 
         result = collect_downloaded_paths(origin_path)
-        _record_origin_paths(status_path, result)
 
         if not result.video_path:
             raise FileNotFoundError("Video file not found after download")
@@ -157,24 +123,10 @@ def download(request: DownloadRequest) -> DownloadResult:
         if not result.thumbnail_path:
             output.info("Thumbnail file not found, skipping")
 
-        update_status_for_workspace(
-            status_path,
-            {
-                "status": "success",
-                "failed_reason": None,
-            },
-        )
         output.success(f"Downloaded to {origin_path}/")
         output.info(f"Video+audio: {result.video_path}")
         return result
     except Exception as exc:
-        update_status_for_workspace(
-            status_path,
-            {
-                "status": "failed",
-                "failed_reason": str(exc),
-            },
-        )
         output.error(str(exc))
         raise
 
