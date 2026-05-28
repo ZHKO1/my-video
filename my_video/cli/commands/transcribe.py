@@ -67,8 +67,11 @@ def run(args: Namespace, config: dict) -> int:
 
         hallucination_result = scan_whisperx_hallucinations(paths.whisperx_json)
         if hallucination_result.has_hallucination:
-            output.error(format_hallucination_report(hallucination_result, max_examples=5))
+            output.warn(format_hallucination_report(hallucination_result, max_examples=5))
             # raise RuntimeError(f"WhisperX hallucination detected in {paths.whisperx_json}")
+
+        whisperx_data = read_json(paths.whisperx_json)
+        save_srt(whisperx_data.get("segments", []), str(paths.whisperx_srt))
 
         # raw_df = extract_words_dataframe(paths.whisperx_json)        
         # cleaned_df = clean_words_dataframe(raw_df)

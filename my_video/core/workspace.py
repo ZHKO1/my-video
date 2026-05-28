@@ -30,6 +30,7 @@ class WorkspacePaths:
     raw_audio: Path
     vocal_audio: Path
     whisperx_json: Path
+    whisperx_srt: Path
     word_timestamps: Path
     cleaned_word_timestamps: Path
     transcribe_srt: Path
@@ -53,6 +54,7 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         raw_audio=transcribe_dir / "raw.mp3",
         vocal_audio=transcribe_dir / "vocal.mp3",
         whisperx_json=transcribe_dir / "whisperx.json",
+        whisperx_srt=transcribe_dir / "whisperx.srt",
         word_timestamps=transcribe_dir / "word_timestamps.xlsx",
         cleaned_word_timestamps=transcribe_dir / "cleaned_word_timestamps.xlsx",
         transcribe_srt=transcribe_dir / "transcribe.srt",
