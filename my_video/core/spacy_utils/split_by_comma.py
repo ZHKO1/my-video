@@ -1,5 +1,4 @@
 import itertools
-import os
 import warnings
 
 from my_video.cli import output

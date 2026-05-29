@@ -6,7 +6,6 @@
 import atexit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import difflib
-from pathlib import Path
 import re
 import traceback
 from typing import List, Union

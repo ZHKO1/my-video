@@ -1,7 +1,7 @@
 """LLM 翻译器（使用 OpenAI）"""
 
 import json
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import json_repair
 import openai

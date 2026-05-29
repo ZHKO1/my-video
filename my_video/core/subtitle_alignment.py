@@ -1,7 +1,6 @@
 import re
 from pathlib import Path
 
-import pandas as pd
 
 from my_video.cli import output
 

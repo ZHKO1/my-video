@@ -2,6 +2,21 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "my_video transcribe",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "cwd": "${workspaceFolder}",
+            "module": "my_video",
+            "args": [
+                "transcribe",
+                "/home/zhko1/work/my-video/How to reverse engineer your favourite game/"
+            ],
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "justMyCode": false
+        },
+        {
             "name": "my_video subtitle",
             "type": "debugpy",
             "request": "launch",
@@ -10,7 +25,7 @@
             "module": "my_video",
             "args": [
                 "subtitle",
-                "/home/zhko1/work/my-video/GODHAND - What Happened_/"
+                "/home/zhko1/work/my-video/How to reverse engineer your favourite game/"
             ],
             "console": "integratedTerminal",
             "envFile": "${workspaceFolder}/.env",

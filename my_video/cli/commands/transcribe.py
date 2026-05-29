@@ -8,13 +8,8 @@ from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
 from my_video.cli.config import get_toml_str, get_toml_value
 from my_video.core.asr.audio_preprocess import (
-    clean_words_dataframe,
     convert_video_to_audio,
-    extract_words_dataframe,
-    normalize_audio_volume,
-    save_dataframe,
     save_srt,
-    split_audio,
 )
 from my_video.core.asr.demucs import demucs_audio
 from my_video.core.asr.hallucination import format_hallucination_report, scan_whisperx_hallucinations
@@ -55,7 +50,7 @@ def run(args: Namespace, config: dict) -> int:
         convert_video_to_audio(video_path, str(paths.raw_audio))
 
         # 2. Demucs vocal separation:
-        if get_toml_value(config, "transcribe.demucs", False):
+        if get_toml_value(config, "transcribe.demucs", True):
             demucs_audio(paths.raw_audio, paths.vocal_audio)
             input_audio = paths.vocal_audio
     

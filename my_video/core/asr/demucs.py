@@ -1,5 +1,4 @@
 import gc
-import os
 from pathlib import Path
 
 from my_video.cli import output

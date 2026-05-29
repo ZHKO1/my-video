@@ -114,9 +114,9 @@ proxy = "socks5://192.168.71.5:20170/"
 `my_video transcribe` 也读取当前目录下的 `my_video.toml`。
 
 - `work_dir`：全局工作目录，支持 `~`
-- `[transcribe].demucs`：是否启用 Demucs 人声分离
-- `[transcribe.whisperx].language`：WhisperX 语言，`"auto"` 表示自动检测
-- `[transcribe.whisperx].model`：WhisperX 模型名，默认 `"large-v3"`
+- `[transcribe].demucs`：是否启用 Demucs 人声分离，默认 `false`
+- `[transcribe.whisperx].language`：WhisperX 语言，默认 `"en"`
+- `[transcribe.whisperx].model`：WhisperX 模型名，默认 `"large-v3-turbo"`
 - `[transcribe.whisperx].model_dir`：本地模型目录，可留空
 
 示例：
@@ -128,8 +128,8 @@ work_dir = "~/work/my-video"
 demucs = true
 
 [transcribe.whisperx]
-language = "auto"
-model = "large-v3"
+language = "en"
+model = "large-v3-turbo"
 model_dir = ""
 ```
 
@@ -156,39 +156,40 @@ model_dir = ""
 命令格式：
 
 ```bash
-uv run my-video transcribe <input-file> [-v | -q]
+uv run my-video transcribe <workspace-path>
 ```
 
 示例：
 
 ```bash
-uv run my-video transcribe ~/work/my-video/demo.webm -v
+uv run my-video transcribe ~/work/my-video/SomeVideoTitle
 ```
 
-行为：
+参数说明：
 
-1. 用 `ffmpeg` 提取音频到工作目录。
-2. 如果 `[transcribe].demucs = true`，先做人声分离，并用人声轨做对齐。
-3. 按静音点切分长音频。
-4. 用本地 WhisperX 逐段转写并对齐。
-5. 保存词级中间结果到 Excel。
+- `<workspace-path>`：工作区目录路径。该目录必须存在，且包含 `status.json`（其中记录 `origin.video_path`）。通常由 `download` 命令生成。
 
-当前实现的主要输出路径：
+执行流程：
 
-- `<input-file-name>.srt`：源字幕文件，写在 `work_dir/` 下
-- `log/cleaned_chunks.xlsx`：词级中间结果
-- `audio/raw.mp3`：抽取后的原始音频
-- `audio/vocal.mp3`：Demucs 人声轨
-- `audio/background.mp3`：Demucs 背景音轨
+1. 检查 workspace 目录是否存在。
+2. 从 `<workspace>/status.json` 读取原始视频路径 `origin.video_path`。
+3. 如果 `transcribe/whisperx.json` 已存在，直接返回成功（幂等）。
+4. 用 `ffmpeg` 提取音频到 `transcribe/raw.mp3`。
+5. 如果 `[transcribe].demucs = true`，先做 Demucs 人声分离，输出到 `transcribe/vocal.mp3`，并用人声轨做转写。
+6. 用本地 WhisperX 转写音频，输出 JSON 结果到 `transcribe/whisperx.json`。
+7. 扫描转写结果中的 hallucination，若发现则打印警告。
+8. 从 WhisperX 结果生成 `transcribe/whisperx.srt`。
 
-这些路径都是相对于 `work_dir` 的。例如当 `work_dir = "~/work/my-video"` 时，字幕文件会写到：
+当前实现的主要输出路径（相对于 `<workspace-path>`）：
 
-```text
-~/work/my-video/demo.srt
-```
+- `transcribe/whisperx.srt`：WhisperX 生成的字幕文件
+- `transcribe/whisperx.json`：WhisperX 原始转写结果
+- `transcribe/raw.mp3`：抽取后的原始音频
+- `transcribe/vocal.mp3`：Demucs 人声轨（仅在 `demucs = true` 时生成）
 
 注意：
 
+- `transcribe` 接收的是 **workspace 目录**，不是视频文件本身。通常先执行 `download` 生成 workspace，再对其执行 `transcribe`。
 - `demucs` 不是默认依赖；只有在 `[transcribe].demucs = true` 时才需要额外安装。
 - 第一次加载 WhisperX / pyannote 模型时可能会下载模型文件。
-- 当前 `transcribe` 会写 `cleaned_chunks.xlsx`，所以环境里需要 `openpyxl`。
+- 当前实现不会生成词级 Excel 中间结果（该逻辑已注释掉）。

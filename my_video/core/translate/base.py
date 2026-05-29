@@ -3,7 +3,7 @@
 import atexit
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, List, Optional
+from typing import List
 
 from my_video.cli import output
 from my_video.core.asr.asr_data import ASRData, ASRDataSeg

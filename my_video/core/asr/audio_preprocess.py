@@ -1,5 +1,5 @@
 from pathlib import Path
-import os, subprocess
+import subprocess
 from typing import List, Tuple
 
 import pandas as pd
@@ -25,7 +25,7 @@ def _ffmpeg_has_encoder(encoder_name: str) -> bool:
 def convert_video_to_audio(video_path: str, audio_path: str):
     audio_path = Path(audio_path)
     audio_path.parent.mkdir(parents=True, exist_ok=True)
-    output.info(f"Converting to high quality audio with FFmpeg ......")
+    output.info("Converting to high quality audio with FFmpeg ......")
     if _ffmpeg_has_encoder('libmp3lame'):
         cmd = [
             'ffmpeg', '-y', '-i', video_path, '-vn',

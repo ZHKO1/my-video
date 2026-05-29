@@ -7,7 +7,7 @@ import atexit
 import difflib
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import json_repair
 

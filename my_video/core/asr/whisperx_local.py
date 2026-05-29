@@ -12,7 +12,6 @@ from whisperx.audio import SAMPLE_RATE as WHISPER_SAMPLE_RATE
 from whisperx.audio import load_audio as whisperx_load_audio
 
 from my_video.cli import output
-from my_video.cli.config import get_toml_str
 from my_video.core.utils.decorator import check_file_exists
 
 
@@ -100,7 +99,7 @@ def whisperx_audio(
             model_ref = str(candidate)
 
     language = None if whisper_language == "auto" else whisper_language
-    output.info(f"Starting WhisperX")
+    output.info("Starting WhisperX")
     model = whisperx.load_model(
         model_ref,
         device,
