@@ -40,7 +40,7 @@
             "module": "my_video",
             "args": [
                 "synthesize",
-                "/home/zhko1/work/my-video/GODHAND - What Happened_/"
+                "/home/zhko1/work/my-video/How to reverse engineer your favourite game/"
             ],
             "console": "integratedTerminal",
             "envFile": "${workspaceFolder}/.env",

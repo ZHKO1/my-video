@@ -1,7 +1,7 @@
 work_dir = "~/work/my-video"
 
 [llm]
-model = "deepseek-v4-pro"
+model = "deepseek-v4-flash"
 
 [download]
 cookie_path = "./cookies.txt"
@@ -19,7 +19,9 @@ model_dir = ""
 thread_num = 4
 batch_size = 20
 max_word_count_english = 18
-max_word_count_cjk = 16
+max_word_count_cjk = 22
+max_sentence_word_count_english = 50
+max_sentence_word_count_cjk = 50
 need_reflect = true
 
 target_language = "zh"

@@ -13,7 +13,6 @@ class TranslatorFactory:
     @staticmethod
     def create_translator(
         thread_num: int = 5,
-        batch_num: int = 10,
         model: str = "gpt-4o-mini",
         custom_prompt: str = "",
         is_reflect: bool = False,
@@ -24,7 +23,6 @@ class TranslatorFactory:
 
             return LLMTranslator(
                     thread_num=thread_num,
-                    batch_num=batch_num,
                     target_language=target_language,
                     model=model,
                     custom_prompt=custom_prompt,

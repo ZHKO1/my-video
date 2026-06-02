@@ -1,7 +1,10 @@
 """Unified LLM client for the application."""
 
+import json
 import os
 import threading
+from datetime import datetime
+from pathlib import Path
 from typing import Any, List, Optional
 from urllib.parse import urlparse, urlunparse
 
@@ -16,10 +19,12 @@ from tenacity import (
 )
 
 from my_video.cli import output
+from my_video.cli.config import get_work_dir, load_toml_config
 from my_video.core.utils.cache import get_llm_cache, memoize
 
 _global_client: Optional[OpenAI] = None
 _client_lock = threading.Lock()
+_log_lock = threading.Lock()
 
 
 
@@ -76,6 +81,53 @@ def before_sleep_log(retry_state: RetryCallState) -> None:
     )
 
 
+def _load_config() -> dict[str, Any]:
+    config, _ = load_toml_config()
+    return config or {}
+
+
+def _get_llm_log_path() -> Path:
+    config = _load_config()
+    work_dir = get_work_dir(config) or "."
+    return Path(work_dir) / "log" / "llm.log"
+
+
+def _serialize_log_value(value: Any) -> str:
+    if value is None:
+        return "None"
+    if hasattr(value, "model_dump"):
+        value = value.model_dump()
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _format_exception(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _write_llm_log(*, status: str, model: str, messages: List[dict], response: Any, error: Exception | None) -> None:
+    log_path = _get_llm_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = [
+        f"timestamp={datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"status={status}",
+        f"model={model}",
+        f"messages={_serialize_log_value(messages)}",
+        f"response={_serialize_log_value(response)}",
+    ]
+    if error is not None:
+        lines.append(f"error={_format_exception(error)}")
+
+    entry = "\n".join(lines) + "\n\n"
+
+    with _log_lock:
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(entry)
+
+
 @retry(
     stop=stop_after_attempt(10),
     wait=wait_random_exponential(multiplier=1, min=5, max=60),
@@ -109,7 +161,11 @@ def call_llm(
     **kwargs: Any,
 ) -> Any:
     """Call LLM API with automatic caching."""
-    response = _call_llm_api(messages, model, temperature, **kwargs)
+    try:
+        response = _call_llm_api(messages, model, temperature, **kwargs)
+    except Exception as exc:
+        _write_llm_log(status="error", model=model, messages=messages, response=None, error=exc)
+        raise
 
     if not (
         response
@@ -119,6 +175,9 @@ def call_llm(
         and hasattr(response.choices[0], "message")
         and response.choices[0].message.content
     ):
-        raise ValueError("Invalid OpenAI API response: empty choices or content")
+        error = ValueError("Invalid OpenAI API response: empty choices or content")
+        _write_llm_log(status="error", model=model, messages=messages, response=response, error=error)
+        raise error
 
+    _write_llm_log(status="success", model=model, messages=messages, response=response, error=None)
     return response

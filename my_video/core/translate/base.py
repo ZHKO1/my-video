@@ -6,8 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 from my_video.cli import output
-from my_video.core.asr.asr_data import ASRData, ASRDataSeg
-from my_video.core.entities import SubtitleProcessData
+from my_video.core.asr.asr_data import SubtitleLine
 from my_video.core.translate.types import TargetLanguage
 from my_video.core.utils.cache import generate_cache_key, get_translate_cache
 
@@ -17,11 +16,9 @@ class BaseTranslator(ABC):
     def __init__(
         self,
         thread_num: int,
-        batch_num: int,
         target_language: TargetLanguage,
     ):
         self.thread_num = thread_num
-        self.batch_num = batch_num
         self.target_language = target_language
         self.is_running = True
         self.executor = None
@@ -34,48 +31,23 @@ class BaseTranslator(ABC):
         self.executor = ThreadPoolExecutor(max_workers=self.thread_num)
         atexit.register(self.stop)
 
-    def translate_subtitle(self, subtitle_data: ASRData) -> ASRData:
-        """翻译字幕文件"""
+    def translate_subtitle(self, subtitle_data: list[SubtitleLine]) -> list[SubtitleLine]:
+        """翻译字幕文件并回写翻译结果。"""
         try:
-            asr_data = subtitle_data
-
-            # 将ASRData转换为SubtitleProcessData列表
-            translate_data_list = [
-                SubtitleProcessData(index=i, original_text=seg.text)
-                for i, seg in enumerate(asr_data.segments, 1)
-            ]
-
-            # 分批处理字幕
-            chunks = self._split_chunks(translate_data_list)
+            chunks = self._batch_subtitle_lines(subtitle_data)
 
             # 多线程翻译
-            translated_list = self._parallel_translate(chunks)
-
-            # 设置Subtitle segment的翻译文本
-            new_segments = self._set_segments_translated_text(
-                asr_data.segments, translated_list
-            )
-
-            return ASRData(new_segments)
+            self._parallel_translate(chunks)
+            return subtitle_data
         except Exception as e:
             output.error(f"Translation failed: {str(e)}")
             raise RuntimeError(f"Translation failed: {str(e)}")
 
-    def _split_chunks(
-        self, translate_data_list: List[SubtitleProcessData]
-    ) -> List[List[SubtitleProcessData]]:
-        """将字幕分割成块"""
-        return [
-            translate_data_list[i : i + self.batch_num]
-            for i in range(0, len(translate_data_list), self.batch_num)
-        ]
-
     def _parallel_translate(
-        self, chunks: List[List[SubtitleProcessData]]
-    ) -> List[SubtitleProcessData]:
-        """并行翻译All块"""
+        self, chunks: List[list[SubtitleLine]]
+    ) -> None:
+        """并行翻译All块。"""
         future_to_chunk = {}
-        translated_list = []
         failed_count = 0
         total_segments = sum(len(c) for c in chunks)
 
@@ -87,12 +59,10 @@ class BaseTranslator(ABC):
             if not self.is_running:
                 break
             try:
-                result = future.result()
-                translated_list.extend(result)
+                future.result()
             except Exception as e:
                 output.error(f"Translation chunk failed: {e}")
                 failed_count += len(future_to_chunk[future])
-                translated_list.extend(future_to_chunk[future])
 
         # Raise if all or most translations failed
         if failed_count > 0 and total_segments > 0:
@@ -105,18 +75,18 @@ class BaseTranslator(ABC):
             elif failed_count > 0:
                 output.warn(f"Translation partially failed: {failed_count}/{total_segments} segments")
 
-        return translated_list
-
-    def _get_cache_key(self, chunk: List[SubtitleProcessData]) -> str:
+    def _get_cache_key(self, chunk: list[SubtitleLine]) -> str:
         """生成缓存键"""
         class_name = self.__class__.__name__
-        chunk_key = generate_cache_key(chunk)
+        chunk_key = generate_cache_key(
+            [{"key": line.line_id, "text": line.text} for line in chunk]
+        )
         lang = self.target_language.value
         return f"{class_name}:{chunk_key}:{lang}"
 
     def _safe_translate_chunk(
-        self, chunk: List[SubtitleProcessData]
-    ) -> List[SubtitleProcessData]:
+        self, chunk: list[SubtitleLine]
+    ) -> list[SubtitleLine]:
         """安全的翻译块"""
         try:
             cache_key = self._get_cache_key(chunk)
@@ -127,7 +97,8 @@ class BaseTranslator(ABC):
                 cached_result = None
                 self._cache.delete(cache_key)
             if cached_result is not None:
-                return cached_result
+                self._apply_translated_chunk(chunk, cached_result)
+                return chunk
 
             result = self._translate_chunk(chunk)
 
@@ -138,28 +109,64 @@ class BaseTranslator(ABC):
             output.error(f"Translation failed: {str(e)}")
             raise
 
-    @staticmethod
-    def _set_segments_translated_text(
-        original_segments: List[ASRDataSeg], translated_list: List[SubtitleProcessData]
-    ) -> List[ASRDataSeg]:
-        """设置Subtitle segment的翻译文本"""
-        # 创建索引到翻译文本的映射
-        translation_map = {data.index: data.translated_text for data in translated_list}
-
-        for i, seg in enumerate(original_segments, 1):
-            if i not in translation_map:
-                output.error(f"Subtitle segment {i} has no translation")
-                continue
-            seg.translated_text = translation_map[i]
-
-        return original_segments
-
     @abstractmethod
     def _translate_chunk(
-        self, subtitle_chunk: List[SubtitleProcessData]
-    ) -> List[SubtitleProcessData]:
+        self, subtitle_chunk: list[SubtitleLine]
+    ) -> list[SubtitleLine]:
         """翻译字幕块"""
         pass
+
+    @staticmethod
+    def _apply_translated_chunk(
+        target_chunk: list[SubtitleLine],
+        translated_chunk: list[SubtitleLine],
+    ) -> None:
+        translated_map = {
+            line.line_id: line.translate_text for line in translated_chunk
+        }
+        for line in target_chunk:
+            line.translate_text = translated_map.get(line.line_id, line.translate_text)
+
+    @staticmethod
+    def _batch_subtitle_lines(lines: list[SubtitleLine]) -> list[list[SubtitleLine]]:
+        grouped: list[list[SubtitleLine]] = []
+        current_group_index: int | None = None
+        current_group: list[SubtitleLine] = []
+
+        for line in lines:
+            if current_group_index is None:
+                current_group_index = line.group_index
+            if line.group_index != current_group_index:
+                grouped.append(current_group)
+                current_group = []
+                current_group_index = line.group_index
+            current_group.append(line)
+
+        if current_group:
+            grouped.append(current_group)
+
+        batches: list[list[SubtitleLine]] = []
+        current_batch: list[SubtitleLine] = []
+        current_group_count = 0
+        seen_groups: set[int] = set()
+
+        for group_lines in grouped:
+            group_index = group_lines[0].group_index
+            if current_batch and current_group_count >= 20 and group_index not in seen_groups:
+                batches.append(current_batch)
+                current_batch = []
+                current_group_count = 0
+                seen_groups = set()
+
+            if group_index not in seen_groups:
+                current_group_count += 1
+                seen_groups.add(group_index)
+            current_batch.extend(group_lines)
+
+        if current_batch:
+            batches.append(current_batch)
+
+        return batches
 
     def stop(self):
         """停止翻译器"""

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from datetime import datetime
 from pathlib import Path
 import subprocess
 import time
+from zoneinfo import ZoneInfo
 
 import cv2
 
@@ -13,7 +15,9 @@ from my_video.cli import exit_codes as EXIT
 from my_video.cli import output
 from my_video.cli.config import get_toml_value
 from my_video.core.utils.helper import read_json
-from my_video.core.workspace import build_workspace_paths
+from my_video.core.workspace import WorkspacePaths, build_workspace_paths
+
+_BEIJING_TZ = ZoneInfo("Asia/Shanghai")
 
 SRC_FONT_SIZE = 15
 TRANS_FONT_SIZE = 17
@@ -122,6 +126,44 @@ def merge_subtitles_to_video(
     output.success(f"Subtitle merge complete in {time.time() - start_time:.2f}s -> {output_path}")
 
 
+def _generate_output_md(paths: WorkspacePaths) -> None:
+    if not paths.info_path.exists():
+        raise RuntimeError(f"info.json not found: {paths.info_path}")
+
+    try:
+        info = read_json(paths.info_path)
+    except Exception as exc:
+        raise RuntimeError(f"info.json is not valid JSON: {paths.info_path}") from exc
+
+    if info is None:
+        raise RuntimeError(f"info.json not found: {paths.info_path}")
+
+    if not isinstance(info, dict):
+        raise RuntimeError(f"info.json must contain a JSON object: {paths.info_path}")
+
+    required_fields = ["webpage_url", "title", "uploader", "release_timestamp"]
+    missing = [f for f in required_fields if f not in info]
+    if missing:
+        raise RuntimeError(f"info.json missing required fields: {', '.join(missing)}")
+
+    raw_ts = info["release_timestamp"]
+    try:
+        timestamp = int(raw_ts)
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(f"release_timestamp is not a valid integer: {raw_ts!r}") from exc
+
+    dt = datetime.fromtimestamp(timestamp, _BEIJING_TZ)
+    release_date = f"{dt.year}年{dt.month}月{dt.day}日"
+
+    content = (
+        f"视频: {info['webpage_url']}\n"
+        f"标题: {info['title']}\n"
+        f"作者: {info['uploader']}\n"
+        f"原视频投稿时间: {release_date}\n"
+    )
+    paths.output_md.write_text(content, encoding="utf-8")
+
+
 def run(args: Namespace, config: dict) -> int:
     workspace_path = Path(args.workspace_path).expanduser()
     if not workspace_path.is_dir():
@@ -156,6 +198,8 @@ def run(args: Namespace, config: dict) -> int:
             paths.output_mp4,
             ffmpeg_gpu,
         )
+        _generate_output_md(paths)
+        output.success(f"output.md generated -> {paths.output_md}")
     except Exception as exc:
         output.error(str(exc))
         return EXIT.RUNTIME_ERROR
