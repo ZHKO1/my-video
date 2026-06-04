@@ -43,6 +43,8 @@ def test_build_workspace_paths_matches_compat_builder(tmp_path: Path) -> None:
     assert new_paths.whisperx_json == new_paths.transcribe_dir / "whisperx.json"
     assert new_paths.word_timestamps == new_paths.transcribe_dir / "word_timestamps.xlsx"
     assert new_paths.cleaned_word_timestamps == new_paths.transcribe_dir / "cleaned_word_timestamps.xlsx"
+    assert new_paths.compare_txt == new_paths.subtitle_dir / "compare.txt"
+    assert new_paths.punctuation_txt == new_paths.subtitle_dir / "punctuation.txt"
     assert new_paths.output_md == new_paths.base_dir / "output.md"
 
 

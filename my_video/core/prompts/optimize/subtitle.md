@@ -19,14 +19,15 @@ You will receive:
 2. Use context to determine whether proper nouns are correctly recognized from dictation.
 3. Remove filler words and non-verbal sounds: um, uh, ah, laughter markers, coughing sounds, etc.
 4. Standardize formatting:
-   - Do NOT change punctuation (leave as is)
-   - Do NOT change capitalization (leave as is)
+   - You MAY fix punctuation when it is clearly wrong or missing
+   - You MAY fix capitalization when it is clearly wrong
    - Mathematical formulas in plain text (use ×, ÷, =, etc.)
    - Code syntax (variable names, function calls)
-4. Maintain subtitle numbering (no merging or splitting entries)
-5. Use reference information to correct terminology when provided
-6. Keep original language (English stays English, Chinese stays Chinese)
-7. Output only the corrected JSON, no explanations!!!
+5. Maintain subtitle numbering (no merging or splitting entries)
+6. Use reference information mainly for proper nouns, names, places, products, and technical terms
+7. Do not blindly trust the reference. It may contain extra words, missing words, or missing punctuation.
+8. Keep original language (English stays English, Chinese stays Chinese)
+9. Output only the corrected JSON, no explanations!!!
 </instructions>
 
 <output_format>
@@ -91,6 +92,7 @@ Terms: 机器学习, 神经网络, 反向传播算法
 <critical_notes>
 
 - Preserve meaning and structure - only fix errors!!!
+- Keep the original order and sentence structure. Do not reorder content.
 - Use reference information to correct misrecognized terms
 - Output pure JSON only, no explanations or markdown
 - Maintain original language throughout

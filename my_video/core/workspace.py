@@ -31,11 +31,10 @@ class WorkspacePaths:
     vocal_audio: Path
     whisperx_json: Path
     whisperx_srt: Path
-    word_timestamps: Path
-    cleaned_word_timestamps: Path
-    transcribe_srt: Path
     src_srt: Path
     trans_srt: Path
+    compare_txt: Path
+    punctuation_txt: Path
     optimized_txt: Path
     summary_json: Path
     output_mp4: Path
@@ -58,14 +57,13 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         vocal_audio=transcribe_dir / "vocal.mp3",
         whisperx_json=transcribe_dir / "whisperx.json",
         whisperx_srt=transcribe_dir / "whisperx.srt",
-        word_timestamps=transcribe_dir / "word_timestamps.xlsx",
-        cleaned_word_timestamps=transcribe_dir / "cleaned_word_timestamps.xlsx",
-        transcribe_srt=transcribe_dir / "transcribe.srt",
-        src_srt= subtitle_dir / "src.srt",
+        src_srt=subtitle_dir / "src.srt",
         trans_srt= subtitle_dir / "trans.srt",
+        compare_txt=subtitle_dir / "compare.txt",
+        punctuation_txt=subtitle_dir / "punctuation.txt",
         optimized_txt=subtitle_dir / "optimized.txt",
         summary_json=subtitle_dir / "summary.json",
-        output_mp4=base/ "output.mp4",
+        output_mp4=base / "output.mp4",
         output_md=base / "output.md",
 
     )

@@ -163,9 +163,8 @@ class TestSentenceGroups:
         groups = build_sentence_groups(segments)
 
         assert len(groups) == 1
-        assert groups[0].translate_text == ""
         assert groups[0].optimized_text == ""
-        assert groups[0].optimize_logs == []
+        assert groups[0].optimize_log == ""
 
 
 class TestAsrDataJson:
@@ -226,7 +225,7 @@ class TestAsrDataJson:
                     segments=[ASRDataSeg("hello", 0, 100)],
                     text="hello",
                     optimized_text="HELLO",
-                    optimize_logs=["log one", "log two"],
+                    optimize_log="log one",
                 ),
                 SentenceGroup(
                     index=1,
@@ -239,5 +238,5 @@ class TestAsrDataJson:
         txt_path = tmp_path / "optimized.txt"
         content = sentence_data.to_txt(txt_path)
 
-        assert content == "0. HELLO\n  log one\n  log two\n1. world"
+        assert content == "0. log one\n1. world"
         assert txt_path.read_text(encoding="utf-8") == content

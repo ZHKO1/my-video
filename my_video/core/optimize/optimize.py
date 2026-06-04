@@ -5,25 +5,38 @@
 
 import atexit
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+import json
 from typing import Dict, List, Optional, Tuple
 
 import json_repair
 from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
+from my_video.core.asr.text_diff import render_inline_diff, rewrite_segments_with_timestamps
 from my_video.core.utils.text_utils import count_words, is_mainly_cjk
 
 from ..asr.asr_data import (
+    ASRData,
     ASRDataSeg,
     ASRSentenceData,
     SentenceGroup,
-    batch_sentence_groups,
 )
 from ..llm import call_llm
 from ..prompts import get_prompt
 from ..utils.helper import comparison_bases_from_text, comparison_bases_from_tokens, split_token_parts, split_tokens
 
 MAX_STEPS = 3
+REFERENCE_TIME_PADDING_MS = 5000
+
+
+@dataclass
+class OptimizationBatch:
+    groups: List[SentenceGroup]
+    subtitle_chunk: Dict[str, str]
+    reference_text: str
+    start_time_ms: int
+    end_time_ms: int
 
 
 class SubtitleOptimizer:
@@ -65,15 +78,18 @@ class SubtitleOptimizer:
         self.executor = ThreadPoolExecutor(max_workers=self.thread_num)
         atexit.register(self.stop)
 
-    def optimize_subtitle(self, subtitle_data: ASRSentenceData) -> ASRSentenceData:
+    def optimize_subtitle(
+        self,
+        subtitle_data: ASRSentenceData,
+        reference_data: ASRData | None = None,
+    ) -> ASRSentenceData:
         """优化字幕句组。"""
         try:
             sentence_groups = subtitle_data.sentences
-
-            chunks = self._batch_sentence_groups(sentence_groups)
+            batches = self._batch_sentence_groups(sentence_groups, reference_data)
 
             # 并行优化
-            optimized_dict = self._parallel_optimize(chunks)
+            optimized_dict = self._parallel_optimize(batches)
 
             return self._write_back_groups(sentence_groups, optimized_dict)
 
@@ -82,19 +98,60 @@ class SubtitleOptimizer:
             raise RuntimeError(f"Optimization failed: {str(e)}")
 
     def _batch_sentence_groups(
-        self, groups: List[SentenceGroup], threshold: int = 500
-    ) -> List[Dict[str, str]]:
-        batched_groups = batch_sentence_groups(groups, threshold)
-        return [
-            {str(group.index): group.text for group in batch}
-            for batch in batched_groups
-        ]
+        self,
+        groups: List[SentenceGroup],
+        reference_data: ASRData | None = None,
+    ) -> List[OptimizationBatch]:
+        batches: List[OptimizationBatch] = []
+        for index in range(0, len(groups), self.batch_num):
+            batch_groups = groups[index : index + self.batch_num]
+            if not batch_groups:
+                continue
+            start_time_ms = batch_groups[0].segments[0].start_time
+            end_time_ms = batch_groups[-1].segments[-1].end_time
+            subtitle_chunk = {str(group.index): group.text for group in batch_groups}
+            batches.append(
+                OptimizationBatch(
+                    groups=batch_groups,
+                    subtitle_chunk=subtitle_chunk,
+                    reference_text=self._build_reference_text(
+                        reference_data,
+                        start_time_ms=start_time_ms,
+                        end_time_ms=end_time_ms,
+                    ),
+                    start_time_ms=start_time_ms,
+                    end_time_ms=end_time_ms,
+                )
+            )
+        return batches
 
-    def _parallel_optimize(self, chunks: List[Dict[str, str]]) -> Dict[str, str]:
+    @classmethod
+    def _build_reference_text(
+        cls,
+        reference_data: ASRData | None,
+        *,
+        start_time_ms: int,
+        end_time_ms: int,
+    ) -> str:
+        if reference_data is None:
+            return ""
+
+        window_start = start_time_ms - REFERENCE_TIME_PADDING_MS
+        window_end = end_time_ms + REFERENCE_TIME_PADDING_MS
+        matched_segments = [
+            segment.text.strip()
+            for segment in reference_data.segments
+            if segment.text.strip()
+            and segment.start_time <= window_end
+            and segment.end_time >= window_start
+        ]
+        return " ".join(matched_segments)
+
+    def _parallel_optimize(self, batches: List[OptimizationBatch]) -> Dict[str, str]:
         """并行优化All批次
 
         Args:
-            chunks: 字幕批次列表
+            batches: 字幕批次列表
 
         Returns:
             优化后的字幕字典
@@ -106,12 +163,12 @@ class SubtitleOptimizer:
         optimized_dict: Dict[str, str] = {}
 
         # 提交All任务
-        for chunk in chunks:
-            future = self.executor.submit(self._optimize_chunk, chunk)
-            futures.append((future, chunk))
+        for batch in batches:
+            future = self.executor.submit(self._optimize_chunk, batch)
+            futures.append((future, batch))
 
         # 收集结果
-        for future, chunk in futures:
+        for future, batch in futures:
             if not self.is_running:
                 break
 
@@ -120,33 +177,37 @@ class SubtitleOptimizer:
                 optimized_dict.update(result)
             except Exception as e:
                 output.error(f"Optimization batch failed: {str(e)}")
-                optimized_dict.update(chunk)  # 失败时保留原文
+                optimized_dict.update(batch.subtitle_chunk)  # 失败时保留原文
 
         return optimized_dict
 
-    def _optimize_chunk(self, subtitle_chunk: Dict[str, str]) -> Dict[str, str]:
+    def _optimize_chunk(self, batch: OptimizationBatch) -> Dict[str, str]:
         """优化单个字幕批次
 
         Args:
-            subtitle_chunk: 字幕批次字典
+            batch: 字幕批次数据
 
         Returns:
             优化后的字幕批次
         """
-        start_idx = next(iter(subtitle_chunk))
-        end_idx = next(reversed(subtitle_chunk))
+        start_idx = str(batch.groups[0].index)
+        end_idx = str(batch.groups[-1].index)
         output.info(f"[+]Optimizing subtitles: {start_idx} - {end_idx}")
 
         try:
-            result = self.agent_loop(subtitle_chunk)
+            result = self.agent_loop(batch.subtitle_chunk, batch.reference_text)
 
             return result
 
         except Exception as e:
             output.error(f"Optimization failed: {str(e)}")
-            return subtitle_chunk
+            return batch.subtitle_chunk
 
-    def agent_loop(self, subtitle_chunk: Dict[str, str]) -> Dict[str, str]:
+    def agent_loop(
+        self,
+        subtitle_chunk: Dict[str, str],
+        reference_text: str,
+    ) -> Dict[str, str]:
         """使用agent loop优化字幕
 
         LLM → 验证 → 反馈 → 重试 (最多MAX_STEPS次)
@@ -163,13 +224,11 @@ class SubtitleOptimizer:
         # 构建提示词
         user_prompt = (
             f"Correct the following subtitles. Keep the original language, do not translate:\n"
-            f"<input_subtitle>{str(subtitle_chunk)}</input_subtitle>"
+            f"<input_subtitle>{json.dumps(subtitle_chunk, ensure_ascii=False)}</input_subtitle>"
         )
-
-        if self.custom_prompt:
-            user_prompt += (
-                f"\nReference content:\n<reference>{self.custom_prompt}</reference>"
-            )
+        reference_parts = [part.strip() for part in [reference_text, self.custom_prompt] if part.strip()]
+        if reference_parts:
+            user_prompt += "\n<reference>\n" + "\n".join(reference_parts) + "\n</reference>"
 
         messages = [
             {"role": "system", "content": get_prompt("optimize/subtitle")},
@@ -318,13 +377,13 @@ class SubtitleOptimizer:
             optimized_text = optimized_dict.get(str(group.index))
             if optimized_text is None or not optimized_text.strip():
                 group.optimized_text = ""
-                group.optimize_logs = []
+                group.optimize_log = ""
                 new_groups.append(
                     cls._clone_sentence_group(
                         group,
                         text=group.text,
                         optimized_text="",
-                        optimize_logs=[],
+                        optimize_log="",
                         segments=cls._copy_segments(group.segments),
                     )
                 )
@@ -332,35 +391,28 @@ class SubtitleOptimizer:
 
             if optimized_text.strip() == group.text.strip():
                 group.optimized_text = ""
-                group.optimize_logs = []
+                group.optimize_log = ""
                 new_groups.append(
                     cls._clone_sentence_group(
                         group,
                         text=group.text,
                         optimized_text="",
-                        optimize_logs=[],
+                        optimize_log="",
                         segments=cls._copy_segments(group.segments),
                     )
                 )
                 continue
 
-            optimize_logs = cls._build_group_change_logs(
-                original_segments=group.segments,
-                original_text=group.text,
-                optimized_text=optimized_text,
-            )
-            rewritten_segments = cls._rewrite_group_segments(
-                group.segments,
-                optimized_text,
-            )
+            optimize_log = cls._build_group_change_log(group.text, optimized_text)
+            rewritten_segments = cls._rewrite_group_segments(group.segments, optimized_text)
             group.optimized_text = optimized_text
-            group.optimize_logs = optimize_logs
+            group.optimize_log = optimize_log
             new_groups.append(
                 cls._clone_sentence_group(
                     group,
                     text=optimized_text,
                     optimized_text="",
-                    optimize_logs=[],
+                    optimize_log="",
                     segments=rewritten_segments,
                 )
             )
@@ -372,158 +424,21 @@ class SubtitleOptimizer:
         original_segments: List[ASRDataSeg],
         optimized_text: str,
     ) -> List[ASRDataSeg]:
-        original_tokens = [segment.text.strip() for segment in original_segments]
-        optimized_tokens = split_tokens(optimized_text)
-        opcodes = cls._build_token_opcodes(original_tokens, optimized_tokens)
-
-        rewritten_segments: List[ASRDataSeg] = []
-        for tag, i1, i2, j1, j2 in cls._merge_edit_opcodes(opcodes):
-            if tag == "equal":
-                for old_index, new_index in zip(range(i1, i2), range(j1, j2)):
-                    rewritten_segments.append(
-                        cls._copy_segment_with_text(
-                            original_segments[old_index],
-                            optimized_tokens[new_index],
-                        )
-                    )
-                continue
-
-            if tag == "delete":
-                continue
-
-            if tag == "insert":
-                rewritten_segments.extend(
-                    cls._build_insert_segments(
-                        original_segments=original_segments,
-                        optimized_tokens=optimized_tokens,
-                        insert_at=i1,
-                        token_start=j1,
-                        token_end=j2,
-                    )
-                )
-                continue
-
-            if tag == "replace":
-                rewritten_segments.extend(
-                    cls._build_replace_segments(
-                        original_segments=original_segments,
-                        optimized_tokens=optimized_tokens,
-                        original_start=i1,
-                        original_end=i2,
-                        token_start=j1,
-                        token_end=j2,
-                    )
-                )
-
-        return rewritten_segments
-
-    @classmethod
-    def _build_token_opcodes(
-        cls,
-        original_tokens: List[str],
-        optimized_tokens: List[str],
-    ) -> List[Tuple[str, int, int, int, int]]:
-        original_bases = comparison_bases_from_tokens(original_tokens)
-        optimized_bases = comparison_bases_from_tokens(optimized_tokens)
-        return Levenshtein.opcodes(
-            original_bases,
-            optimized_bases,
+        return rewrite_segments_with_timestamps(
+            original_segments,
+            optimized_text,
+            mode="strict",
         )
 
     @classmethod
-    def _build_group_change_logs(
-        cls,
-        original_segments: List[ASRDataSeg],
-        original_text: str,
-        optimized_text: str,
-    ) -> List[str]:
-        original_units, optimized_units = cls._build_change_units(
-            original_segments=original_segments,
-            original_text=original_text,
-            optimized_text=optimized_text,
+    def _build_group_change_log(cls, original_text: str, optimized_text: str) -> str:
+        log = render_inline_diff(
+            original_text,
+            optimized_text,
+            mode="strict",
+            display="candidate",
         )
-        if comparison_bases_from_tokens(original_units) == comparison_bases_from_tokens(optimized_units):
-            return []
-
-        opcodes = cls._build_token_opcodes(original_units, optimized_units)
-        merged_opcodes = cls._merge_edit_opcodes(opcodes)
-        logs: List[str] = []
-        for opcode in merged_opcodes:
-            if opcode[0] == "equal":
-                continue
-
-            change = cls._format_group_change_line(
-                original_text=original_text,
-                optimized_text=optimized_text,
-                original_units=original_units,
-                optimized_units=optimized_units,
-                opcode=opcode,
-            )
-            if change:
-                logs.append(change)
-        return logs
-
-    @classmethod
-    def _build_change_units(
-        cls,
-        original_segments: List[ASRDataSeg],
-        original_text: str,
-        optimized_text: str,
-    ) -> Tuple[List[str], List[str]]:
-        original_tokens = [segment.text.strip() for segment in original_segments]
-        text_is_cjk = (
-            is_mainly_cjk(original_text)
-            and " " not in original_text
-            and " " not in optimized_text.strip()
-        )
-        if text_is_cjk:
-            return list("".join(original_tokens)), list(optimized_text.strip())
-
-        return original_tokens, split_tokens(optimized_text)
-
-    @classmethod
-    def _format_group_change_line(
-        cls,
-        original_text: str,
-        optimized_text: str,
-        original_units: List[str],
-        optimized_units: List[str],
-        opcode: Tuple[str, int, int, int, int],
-    ) -> str:
-        tag, i1, i2, j1, j2 = opcode
-        original_fragment = cls._format_units(original_units[i1:i2], original_text)
-        new_fragment = cls._format_units(optimized_units[j1:j2], optimized_text)
-
-        before_context = cls._extract_context(original_text, original_units, i1, "before")
-        after_context = cls._extract_context(original_text, original_units, i2, "after")
-
-        return f"{before_context or '∅'} 【 {original_fragment or '∅'} / {new_fragment or '∅'} 】{after_context or '∅'}"
-
-    @classmethod
-    def _extract_context(
-        cls,
-        original_text: str,
-        original_units: List[str],
-        pivot: int,
-        direction: str,
-        window: int = 5,
-    ) -> str:
-        if is_mainly_cjk(original_text) and " " not in original_text:
-            text = "".join(original_units)
-            char_offset = sum(len(token) for token in original_units[:pivot])
-            if direction == "before":
-                return text[max(0, char_offset - window) : char_offset]
-            return text[char_offset : char_offset + window]
-
-        if direction == "before":
-            return cls._format_units(original_units[max(0, pivot - window) : pivot], original_text)
-        return cls._format_units(original_units[pivot : pivot + window], original_text)
-
-    @classmethod
-    def _format_units(cls, units: List[str], text: str) -> str:
-        if is_mainly_cjk(text) and " " not in text:
-            return "".join(units)
-        return " ".join(units)
+        return "" if log == " ".join(split_tokens(optimized_text.strip())) else log
 
     @staticmethod
     def _copy_segments(segments: List[ASRDataSeg]) -> List[ASRDataSeg]:
@@ -543,7 +458,7 @@ class SubtitleOptimizer:
         *,
         text: str,
         optimized_text: str,
-        optimize_logs: List[str],
+        optimize_log: str,
         segments: List[ASRDataSeg],
     ) -> SentenceGroup:
         return SentenceGroup(
@@ -551,112 +466,7 @@ class SubtitleOptimizer:
             segments=segments,
             text=text,
             optimized_text=optimized_text,
-            optimize_logs=list(optimize_logs),
-        )
-
-    @classmethod
-    def _build_insert_segments(
-        cls,
-        original_segments: List[ASRDataSeg],
-        optimized_tokens: List[str],
-        insert_at: int,
-        token_start: int,
-        token_end: int,
-    ) -> List[ASRDataSeg]:
-        insert_count = token_end - token_start
-        if insert_count <= 0:
-            return []
-
-        left_anchor = original_segments[insert_at - 1] if insert_at > 0 else None
-        right_anchor = (
-            original_segments[insert_at] if insert_at < len(original_segments) else None
-        )
-
-        if left_anchor and right_anchor and right_anchor.start_time > left_anchor.end_time:
-            time_ranges = cls._split_time_range(
-                left_anchor.end_time,
-                right_anchor.start_time,
-                insert_count,
-            )
-        else:
-            anchor = left_anchor or right_anchor
-            if anchor is None:
-                time_ranges = [(0, 0)] * insert_count
-            else:
-                time_ranges = [(anchor.start_time, anchor.end_time)] * insert_count
-
-        return [
-            ASRDataSeg(
-                text=optimized_tokens[token_index],
-                start_time=start_time,
-                end_time=end_time,
-            )
-            for token_index, (start_time, end_time) in zip(
-                range(token_start, token_end),
-                time_ranges,
-            )
-        ]
-
-    @classmethod
-    def _build_replace_segments(
-        cls,
-        original_segments: List[ASRDataSeg],
-        optimized_tokens: List[str],
-        original_start: int,
-        original_end: int,
-        token_start: int,
-        token_end: int,
-    ) -> List[ASRDataSeg]:
-        old_count = original_end - original_start
-        new_count = token_end - token_start
-
-        if new_count <= 0:
-            return []
-
-        if old_count == new_count and old_count > 0:
-            return [
-                cls._copy_segment_with_text(
-                    original_segments[old_index],
-                    optimized_tokens[token_index],
-                )
-                for old_index, token_index in zip(
-                    range(original_start, original_end),
-                    range(token_start, token_end),
-                )
-            ]
-
-        if old_count <= 0:
-            return cls._build_insert_segments(
-                original_segments=original_segments,
-                optimized_tokens=optimized_tokens,
-                insert_at=original_start,
-                token_start=token_start,
-                token_end=token_end,
-            )
-
-        time_ranges = cls._split_time_range(
-            original_segments[original_start].start_time,
-            original_segments[original_end - 1].end_time,
-            new_count,
-        )
-        return [
-            ASRDataSeg(
-                text=optimized_tokens[token_index],
-                start_time=start_time,
-                end_time=end_time,
-            )
-            for token_index, (start_time, end_time) in zip(
-                range(token_start, token_end),
-                time_ranges,
-            )
-        ]
-
-    @staticmethod
-    def _copy_segment_with_text(segment: ASRDataSeg, text: str) -> ASRDataSeg:
-        return ASRDataSeg(
-            text=text,
-            start_time=segment.start_time,
-            end_time=segment.end_time,
+            optimize_log=optimize_log,
         )
 
     @classmethod
@@ -680,49 +490,6 @@ class SubtitleOptimizer:
                 ):
                     punctuation_changes += 1
         return punctuation_changes
-
-    @staticmethod
-    def _merge_edit_opcodes(
-        opcodes: List[Tuple[str, int, int, int, int]],
-    ) -> List[Tuple[str, int, int, int, int]]:
-        merged: List[Tuple[str, int, int, int, int]] = []
-        index = 0
-        while index < len(opcodes):
-            tag, i1, i2, j1, j2 = opcodes[index]
-            if tag == "equal":
-                merged.append((tag, i1, i2, j1, j2))
-                index += 1
-                continue
-
-            merged_i1, merged_i2 = i1, i2
-            merged_j1, merged_j2 = j1, j2
-            index += 1
-            while index < len(opcodes) and opcodes[index][0] != "equal":
-                _, next_i1, next_i2, next_j1, next_j2 = opcodes[index]
-                merged_i2 = next_i2
-                merged_j2 = next_j2
-                index += 1
-
-            if merged_i1 == merged_i2:
-                merged_tag = "insert"
-            elif merged_j1 == merged_j2:
-                merged_tag = "delete"
-            else:
-                merged_tag = "replace"
-            merged.append((merged_tag, merged_i1, merged_i2, merged_j1, merged_j2))
-
-        return merged
-
-    @staticmethod
-    def _split_time_range(start_time: int, end_time: int, count: int) -> List[Tuple[int, int]]:
-        if count <= 0:
-            return []
-        if count == 1:
-            return [(start_time, end_time)]
-
-        total = end_time - start_time
-        points = [start_time + (total * index) // count for index in range(count + 1)]
-        return list(zip(points[:-1], points[1:]))
 
     def stop(self) -> None:
         """停止优化器并清理资源"""

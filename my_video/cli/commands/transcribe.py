@@ -67,13 +67,6 @@ def run(args: Namespace, config: dict) -> int:
 
         whisperx_data = read_json(paths.whisperx_json)
         save_srt(whisperx_data.get("segments", []), str(paths.whisperx_srt))
-
-        # raw_df = extract_words_dataframe(paths.whisperx_json)        
-        # cleaned_df = clean_words_dataframe(raw_df)
-        
-        # segments = cleaned_df.to_dict("records")
-        # save_srt(segments, str(paths.transcribe_srt))
-
         return EXIT.SUCCESS
 
     except Exception as e:
