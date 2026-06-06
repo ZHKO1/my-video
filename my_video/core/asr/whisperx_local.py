@@ -12,7 +12,7 @@ from whisperx.audio import SAMPLE_RATE as WHISPER_SAMPLE_RATE
 from whisperx.audio import load_audio as whisperx_load_audio
 
 from my_video.cli import output
-from my_video.core.utils.decorator import check_file_exists
+from my_video.core.utils.decorator import skip_fun_if_file_exist
 
 
 warnings.filterwarnings("ignore")
@@ -67,7 +67,7 @@ def check_hf_mirror() -> str | None:
     output.info(f"Selected HuggingFace endpoint: {fastest_url}")
     return fastest_url
 
-@check_file_exists(lambda _, whisperx_json, *_args, **_kwargs: whisperx_json)
+@skip_fun_if_file_exist(lambda _, whisperx_json, *_args, **_kwargs: whisperx_json)
 def whisperx_audio(
     audio_file: Path,
     whisperx_json: Path,

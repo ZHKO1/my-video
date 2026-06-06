@@ -7,9 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)*")
-
 
 @dataclass(frozen=True)
 class Token:
@@ -17,7 +15,6 @@ class Token:
     normalized: str
     start: float | None
     end: float | None
-
 
 @dataclass(frozen=True)
 class Hit:

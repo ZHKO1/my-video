@@ -39,7 +39,7 @@ def _resolve_file_path(file_path: PathResolver, *args, **kwargs) -> str:
     return os.fspath(resolved)
 
 
-def check_file_exists(*file_paths: PathResolver):
+def skip_fun_if_file_exist(*file_paths: PathResolver):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):

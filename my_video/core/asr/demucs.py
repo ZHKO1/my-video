@@ -3,9 +3,9 @@ from pathlib import Path
 
 from my_video.cli import output
 from my_video.core.asr.audio_preprocess import normalize_audio_volume
-from my_video.core.utils.decorator import check_file_exists
+from my_video.core.utils.decorator import skip_fun_if_file_exist
 
-@check_file_exists(lambda _, vocal_audio: vocal_audio)
+@skip_fun_if_file_exist(lambda _, vocal_audio: vocal_audio)
 def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
     try:
         import torch
