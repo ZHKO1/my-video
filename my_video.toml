@@ -18,23 +18,11 @@ model_dir = ""
 [subtitle]
 thread_num = 4
 batch_size = 20
-max_word_count_english = 18
+max_word_count_english = 14
 max_word_count_cjk = 22
 max_sentence_word_count_english = 50
 max_sentence_word_count_cjk = 50
 need_reflect = true
-
-target_language = "zh"
-split_by_meaning = true
-generate_summary = true
-split_for_sub = true
-max_split_length = 20
-max_workers = 4
-summary_length = 8000
-max_length = 75
-target_multiplier = 1.0
-
-
 
 [subtitle.translate]
 chunk_size = 600

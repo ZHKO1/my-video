@@ -58,35 +58,33 @@ def run(args: Namespace, config: dict) -> int:
         )
         max_word_count = max_cjk if is_cjk else max_english
 
-        if _prompt_yes_no("是否需要llm校对标点符号？ Y/N?", default=False):
-            original_asr_data = asr_data
-            punctuation_optimizer = PunctuationOptimizer(
-                thread_num=thread_num,
-                model=llm_model,
-                max_sentence_word_count=max_sentence_word_count,
-            )
-            asr_data = punctuation_optimizer.optimize(asr_data)
-            _write_stage_diff(
-                save_path=paths.punctuation_txt,
-                original_text=original_asr_data.to_txt(),
-                updated_text=asr_data.to_txt(),
-            )
+        # if _prompt_yes_no("是否需要llm校对标点符号？ Y/N?", default=False):
+        #     original_asr_data = asr_data
+        #     punctuation_optimizer = PunctuationOptimizer(
+        #         thread_num=thread_num,
+        #         model=llm_model,
+        #         max_sentence_word_count=max_sentence_word_count,
+        #     )
+        #     asr_data = punctuation_optimizer.optimize(asr_data)
+        #     _write_stage_diff(
+        #         save_path=paths.punctuation_txt,
+        #         original_text=original_asr_data.to_txt(),
+        #         updated_text=asr_data.to_txt(),
+        #     )
 
         sentence_data = asr_data.to_sentence_data()
 
-        if _prompt_yes_no("是否需要llm校对优化？ Y/N?", default=True):
-            optimizer = SubtitleOptimizer(
-                thread_num=thread_num,
-                batch_num=batch_size,
-                model=llm_model,
-                custom_prompt="",
-            )
-            new_sentence_data = optimizer.optimize_subtitle(
-                sentence_data,
-                reference_data=reference_data,
-            )
-            sentence_data.to_txt(paths.optimized_txt)
-
+        optimizer = SubtitleOptimizer(
+            thread_num=thread_num,
+            batch_num=batch_size,
+            model=llm_model,
+            custom_prompt="",
+        )
+        new_sentence_data = optimizer.optimize_subtitle(
+            sentence_data,
+            reference_data=reference_data,
+        )
+        sentence_data.to_txt(paths.optimized_txt)
         sentence_data = new_sentence_data.to_asr_data().to_sentence_data()
 
         splitter = SubtitleSplitter(
@@ -98,11 +96,11 @@ def run(args: Namespace, config: dict) -> int:
         )
         subtitle_lines = splitter.split_subtitle(sentence_data.sentences)
 
-        if not paths.summary_json.exists():
-            summary_input_path = paths.subtitle_dir / ".summary_input.txt"
-            sentence_data.to_txt(summary_input_path)
-            summary = get_summary(summary_input_path, model=llm_model)
-            write_json(paths.summary_json, summary)
+        # if not paths.summary_json.exists():
+        #     summary_input_path = paths.subtitle_dir / ".summary_input.txt"
+        #     sentence_data.to_txt(summary_input_path)
+        #     summary = get_summary(summary_input_path, model=llm_model)
+        #     write_json(paths.summary_json, summary)
 
         translator = TranslatorFactory.create_translator(
             thread_num=thread_num,

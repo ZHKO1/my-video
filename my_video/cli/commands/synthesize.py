@@ -19,8 +19,8 @@ from my_video.core.workspace import WorkspacePaths, build_workspace_paths
 
 _BEIJING_TZ = ZoneInfo("Asia/Shanghai")
 
-SRC_FONT_SIZE = 15
-TRANS_FONT_SIZE = 17
+SRC_FONT_SIZE = 13
+TRANS_FONT_SIZE = 15
 FONT_NAME = "SourceHanSansSC-Regular"
 TRANS_FONT_NAME = "SourceHanSansSC-Regular"
 FONT_FILE_PATH = str(Path(__file__).resolve().parents[2] / "assets" / "SourceHanSansSC-Regular.otf")
@@ -83,7 +83,7 @@ def merge_subtitles_to_video(
     trans_style = (
         f"FontSize={TRANS_FONT_SIZE},FontName={TRANS_FONT_NAME},"
         f"PrimaryColour={TRANS_FONT_COLOR},OutlineColour={TRANS_OUTLINE_COLOR},OutlineWidth={TRANS_OUTLINE_WIDTH},"
-        f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle=4"
+        f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=23,BorderStyle=4"
     )
     filter_graph = (
         f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
