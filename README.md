@@ -114,7 +114,7 @@ proxy = "socks5://192.168.71.5:20170/"
 `my_video transcribe` 也读取当前目录下的 `my_video.toml`。
 
 - `work_dir`：全局工作目录，支持 `~`
-- `[transcribe].demucs`：是否启用 Demucs 人声分离，默认 `false`
+- `[transcribe].demucs`：是否启用 Demucs 人声分离，默认 `true`
 - `[transcribe.whisperx].language`：WhisperX 语言，默认 `"en"`
 - `[transcribe.whisperx].model`：WhisperX 模型名，默认 `"large-v3-turbo"`
 - `[transcribe.whisperx].model_dir`：本地模型目录，可留空
@@ -193,3 +193,158 @@ uv run my-video transcribe ~/work/my-video/SomeVideoTitle
 - `demucs` 不是默认依赖；只有在 `[transcribe].demucs = true` 时才需要额外安装。
 - 第一次加载 WhisperX / pyannote 模型时可能会下载模型文件。
 - 当前实现不会生成词级 Excel 中间结果（该逻辑已注释掉）。
+
+## subtitle 配置
+
+`my_video subtitle` 读取当前目录下的 `my_video.toml`。
+
+- `work_dir`：全局工作目录，支持 `~`
+- `[subtitle.thread_num]`：处理线程数，默认 `4`
+- `[subtitle.batch_size]`：LLM 请求批次大小，默认 `20`
+- `[subtitle.need_reflect]`：是否启用反思翻译，默认 `true`
+- `[subtitle.max_sentence_word_count_english]`：英文句子最大词数，默认 `50`
+- `[subtitle.max_sentence_word_count_cjk]`：CJK 句子最大字符数，默认 `50`
+- `[subtitle.max_word_count_cjk]`：单行 CJK 最大字符数，默认 `16`
+- `[subtitle.max_word_count_english]`：单行英文最大词数，默认 `18`
+- `[llm.model]`：LLM 模型名，默认 `"deepseek-v4-pro"`
+
+示例：
+
+```toml
+work_dir = "~/work/my-video"
+
+[subtitle]
+thread_num = 4
+batch_size = 20
+need_reflect = true
+max_sentence_word_count_english = 50
+max_sentence_word_count_cjk = 50
+max_word_count_cjk = 16
+max_word_count_english = 18
+
+[llm]
+model = "deepseek-v4-pro"
+```
+
+## subtitle 用法
+
+命令格式：
+
+```bash
+uv run my-video subtitle <workspace-path>
+```
+
+示例：
+
+```bash
+uv run my-video subtitle ~/work/my-video/SomeVideoTitle
+```
+
+参数说明：
+
+- `<workspace-path>`：工作区目录路径。该目录必须存在，且包含 `transcribe/whisperx.json`（WhisperX 转写结果）。
+
+执行流程：
+
+1. 检查 workspace 目录是否存在。
+2. 从 `transcribe/whisperx.json` 加载词级转写数据。
+3. 加载原始字幕（如有）：若 download 阶段获取了原始字幕，会作为参考文本供优化阶段使用。
+4. 句子分组：将词级片段按句末标点（`.`, `!`, `?`, `。`, `！`, `？`）合并为句子级分组。
+5. LLM 优化：修正识别错误、删除语气词、校正标点，使用 `optimize/subtitle` prompt，支持最多 3 次重试的 agent 循环。
+6. LLM 拆分：将过长句子拆分为多行字幕，使用 `split/structured` prompt，验证内容相似度和词数限制。
+7. LLM 翻译：将每行字幕翻译为目标语言（默认简体中文），使用 `translate/standard` 或 `translate/reflect` prompt，支持缓存。
+8. 写入 SRT 输出。
+
+当前实现的主要输出路径（相对于 `<workspace-path>`）：
+
+- `subtitle/src.srt`：原始语言字幕（SRT 格式）
+- `subtitle/trans.srt`：翻译后的字幕（SRT 格式）
+- `subtitle/optimized.txt`：优化过程的文本日志
+
+## synthesize 配置
+
+`my_video synthesize` 读取当前目录下的 `my_video.toml`。
+
+- `work_dir`：全局工作目录，支持 `~`
+- `[synthesize.ffmpeg_gpu]`：是否使用 GPU 编码（h264_nvenc），默认 `false`
+
+示例：
+
+```toml
+work_dir = "~/work/my-video"
+
+[synthesize]
+ffmpeg_gpu = false
+```
+
+## synthesize 用法
+
+命令格式：
+
+```bash
+uv run my-video synthesize <workspace-path>
+```
+
+示例：
+
+```bash
+uv run my-video synthesize ~/work/my-video/SomeVideoTitle
+```
+
+参数说明：
+
+- `<workspace-path>`：工作区目录路径。该目录必须存在，且包含 `status.json`（其中记录原始视频路径）和 `subtitle/` 目录。
+
+执行流程：
+
+1. 检查 workspace 目录是否存在。
+2. 从 `status.json` 读取原始视频路径。
+3. 读取 `subtitle/src.srt`（源字幕）和 `subtitle/trans.srt`（翻译字幕）。
+4. 使用 FFmpeg 的 `subtitles` 滤镜将双字幕烧录到视频中：
+   - 源字幕：白色文字，13px 字体，黑色描边，带阴影（默认底部位置）
+   - 翻译字幕：青色文字，15px 字体，黑色描边，半透明背景，底部居中，底部边距 23px
+5. 若启用 GPU 编码，使用 `h264_nvenc` 硬件加速。
+6. 生成 `output.md` 记录视频元信息。
+
+当前实现的主要输出路径（相对于 `<workspace-path>`）：
+
+- `output.mp4`：烧录双字幕的最终视频
+- `output.md`：视频元信息摘要
+
+## 完整流程
+
+典型的视频处理流程为：
+
+```bash
+# 1. 下载视频
+uv run my-video download <url>
+
+# 2. 语音转写
+uv run my-video transcribe ~/work/my-video/<VideoTitle>
+
+# 3. 字幕优化、拆分、翻译
+uv run my-video subtitle ~/work/my-video/<VideoTitle>
+
+# 4. 烧录字幕到视频
+uv run my-video synthesize ~/work/my-video/<VideoTitle>
+```
+
+所有输出文件均位于 `<work_dir>/<VideoTitle>/` 目录下，结构如下：
+
+```
+<workspace>/
+  info.json                  -- 视频元信息
+  status.json                -- 流程状态追踪
+  transcribe/
+    raw.mp3                  -- 提取的原始音频
+    vocal.mp3                -- Demucs 人声轨（可选）
+    whisperx.json            -- WhisperX 词级转写结果
+    whisperx.srt             -- WhisperX 原始字幕
+  subtitle/
+    src.srt                  -- 优化后的源语言字幕
+    trans.srt                -- 翻译后的字幕
+    optimized.txt            -- 优化日志
+  origin/                    -- 下载的原始素材
+  output.mp4                 -- 最终带字幕视频
+  output.md                  -- 视频元信息
+```
