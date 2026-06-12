@@ -1,19 +1,20 @@
 import functools
 import json
 import os
-from pathlib import Path
 import subprocess
 import time
 import warnings
+from pathlib import Path
 
 import torch
 import whisperx
-from whisperx.audio import SAMPLE_RATE as WHISPER_SAMPLE_RATE
-from whisperx.audio import load_audio as whisperx_load_audio
+from whisperx.audio import (
+    SAMPLE_RATE as WHISPER_SAMPLE_RATE,
+    load_audio as whisperx_load_audio,
+)
 
 from my_video.cli import output
 from my_video.core.utils.decorator import skip_fun_if_file_exist
-
 
 warnings.filterwarnings("ignore")
 
@@ -67,13 +68,14 @@ def check_hf_mirror() -> str | None:
     output.info(f"Selected HuggingFace endpoint: {fastest_url}")
     return fastest_url
 
+
 @skip_fun_if_file_exist(lambda _, whisperx_json, *_args, **_kwargs: whisperx_json)
 def whisperx_audio(
     audio_file: Path,
     whisperx_json: Path,
     whisper_language: str,
     model_name: str,
-    model_dir = str | None,
+    model_dir=str | None,
 ):
     hf_endpoint = check_hf_mirror()
     if hf_endpoint:
@@ -90,7 +92,9 @@ def whisperx_audio(
     else:
         batch_size = 1
         compute_type = "int8"
-        output.info(f"Using WhisperX on {device} (batch_size={batch_size}, compute_type={compute_type})")
+        output.info(
+            f"Using WhisperX on {device} (batch_size={batch_size}, compute_type={compute_type})"
+        )
 
     model_ref = model_name
     if model_dir:
@@ -119,7 +123,9 @@ def whisperx_audio(
         torch.cuda.empty_cache()
 
     # Align timestamps against the vocal track after raw-audio transcription.
-    model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
+    model_a, metadata = whisperx.load_align_model(
+        language_code=result["language"], device=device
+    )
     result = whisperx.align(
         result["segments"],
         model_a,
@@ -127,7 +133,7 @@ def whisperx_audio(
         full_audio,
         device,
         return_char_alignments=False,
-        print_progress=True
+        print_progress=True,
     )
 
     del model_a

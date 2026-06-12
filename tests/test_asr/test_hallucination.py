@@ -8,6 +8,7 @@ from my_video.core.asr.hallucination import (
     scan_whisperx_hallucinations,
 )
 
+
 def test_scan_repeated_runs_detects_single_word_hallucination() -> None:
     tokens = [
         Token(raw="alpha", normalized="alpha", start=0.0, end=0.1),
@@ -37,7 +38,9 @@ def test_scan_repeated_runs_detects_single_word_hallucination() -> None:
     assert hit.end == 0.6
 
 
-def test_scan_whisperx_hallucinations_prefers_longer_phrase_and_formats_report(tmp_path: Path) -> None:
+def test_scan_whisperx_hallucinations_prefers_longer_phrase_and_formats_report(
+    tmp_path: Path,
+) -> None:
     input_json = tmp_path / "whisperx.json"
     input_json.write_text(
         json.dumps(
@@ -70,4 +73,3 @@ def test_scan_whisperx_hallucinations_prefers_longer_phrase_and_formats_report(t
     assert "WhisperX hallucination scan" in report
     assert "flagged_segments: 1" in report
     assert "phrase='you know'" in report
-

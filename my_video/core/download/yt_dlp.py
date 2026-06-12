@@ -26,7 +26,9 @@ class DownloadResult:
     thumbnail_path: str | None
 
 
-def _find_named_output(out_dir: str | Path, stem: str, suffixes: tuple[str, ...]) -> str | None:
+def _find_named_output(
+    out_dir: str | Path, stem: str, suffixes: tuple[str, ...]
+) -> str | None:
     """Locate a generated file by fixed basename inside the output directory."""
     base_path = Path(out_dir)
 
@@ -44,9 +46,15 @@ def _find_named_output(out_dir: str | Path, stem: str, suffixes: tuple[str, ...]
 def collect_downloaded_paths(out_dir: str | Path) -> DownloadResult:
     """Collect generated output paths using fixed basenames."""
     return DownloadResult(
-        video_path=_find_named_output(out_dir, "video", (".mp4", ".mkv", ".webm", ".mov", ".m4a")),
-        subtitle_path=_find_named_output(out_dir, "subtitle", (".srt", ".vtt", ".ass", ".lrc")),
-        thumbnail_path=_find_named_output(out_dir, "thumb", (".webp", ".jpg", ".jpeg", ".png")),
+        video_path=_find_named_output(
+            out_dir, "video", (".mp4", ".mkv", ".webm", ".mov", ".m4a")
+        ),
+        subtitle_path=_find_named_output(
+            out_dir, "subtitle", (".srt", ".vtt", ".ass", ".lrc")
+        ),
+        thumbnail_path=_find_named_output(
+            out_dir, "thumb", (".webp", ".jpg", ".jpeg", ".png")
+        ),
     )
 
 
@@ -101,7 +109,7 @@ def download(request: DownloadRequest) -> DownloadResult:
                 {
                     "key": "FFmpegThumbnailsConvertor",
                     "format": "jpg",
-                }
+                },
             ],
             "remote_components": ["ejs:github"],
         }

@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 import json
 import re
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
-
-
 
 _BEIJING_TZ = ZoneInfo("Asia/Shanghai")
 _MISSING = object()
@@ -34,11 +32,12 @@ class WorkspacePaths:
     src_srt: Path
     trans_srt: Path
     compare_txt: Path
-    punctuation_txt: Path
+    # punctuation_txt: Path
     optimized_txt: Path
     summary_json: Path
     output_mp4: Path
     output_md: Path
+
 
 def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
     base = Path(workspace_path).expanduser().resolve()
@@ -50,7 +49,6 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         transcribe_dir=transcribe_dir,
         subtitle_dir=subtitle_dir,
         origin_dir=base / "origin",
-
         info_path=base / "info.json",
         status_path=base / "status.json",
         raw_audio=transcribe_dir / "raw.mp3",
@@ -58,14 +56,12 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         whisperx_json=transcribe_dir / "whisperx.json",
         whisperx_srt=transcribe_dir / "whisperx.srt",
         src_srt=subtitle_dir / "src.srt",
-        trans_srt= subtitle_dir / "trans.srt",
+        trans_srt=subtitle_dir / "trans.srt",
         compare_txt=subtitle_dir / "compare.txt",
-        punctuation_txt=subtitle_dir / "punctuation.txt",
         optimized_txt=subtitle_dir / "optimized.txt",
         summary_json=subtitle_dir / "summary.json",
         output_mp4=base / "output.mp4",
         output_md=base / "output.md",
-
     )
 
 
@@ -134,6 +130,7 @@ def update_status_for_workspace(
     path = Path(status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     from my_video.core.utils.helper import read_json
+
     current = {} if full_update else (read_json(path) or {})
     payload = dict(updates) if full_update else _merge_dicts(current, updates)
     payload["last_time"] = format_beijing_time()

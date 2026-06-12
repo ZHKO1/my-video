@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
-from pathlib import Path
 import sys
 import traceback
+from argparse import Namespace
+from pathlib import Path
 
-from my_video.cli import exit_codes as EXIT
-from my_video.cli import output
+from my_video.cli import EXIT, output
 from my_video.cli.config import get_toml_value
 from my_video.core.asr.text_diff import normalize_whitespace, render_inline_diff
 from my_video.core.subtitle_io import write_subtitle_lines_to_srt
-from my_video.core.utils.helper import read_json, write_json
+from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
 
 
@@ -24,13 +23,11 @@ def run(args: Namespace, config: dict) -> int:
 
     paths = build_workspace_paths(workspace_path)
     if not paths.whisperx_json.exists():
-        output.error(f"whisperx.json not found: {str(paths.whisperx_json)}")
+        output.error(f"whisperx.json not found: {paths.whisperx_json!s}")
         return EXIT.FILE_NOT_FOUND
 
-    from my_video.core.analysis.summary import get_summary
     from my_video.core.asr.asr_data import ASRData
     from my_video.core.optimize.optimize import SubtitleOptimizer
-    from my_video.core.optimize.punctuation import PunctuationOptimizer
     from my_video.core.split.split import SubtitleSplitter
     from my_video.core.translate.factory import TranslatorFactory
     from my_video.core.utils.text_utils import is_mainly_cjk
@@ -43,34 +40,11 @@ def run(args: Namespace, config: dict) -> int:
         batch_size = get_toml_value(config, "subtitle.batch_size", 20)
         llm_model = get_toml_value(config, "llm.model", "deepseek-v4-pro")
         need_reflect = get_toml_value(config, "subtitle.need_reflect", True)
-        max_sentence_word_count_english = get_toml_value(
-            config, "subtitle.max_sentence_word_count_english", 50
-        )
-        max_sentence_word_count_cjk = get_toml_value(
-            config, "subtitle.max_sentence_word_count_cjk", 50
-        )
         max_cjk = get_toml_value(config, "subtitle.max_word_count_cjk", 16)
         max_english = get_toml_value(config, "subtitle.max_word_count_english", 18)
 
         is_cjk = is_mainly_cjk("".join(seg.text for seg in asr_data.segments))
-        max_sentence_word_count = (
-            max_sentence_word_count_cjk if is_cjk else max_sentence_word_count_english
-        )
         max_word_count = max_cjk if is_cjk else max_english
-
-        # if _prompt_yes_no("是否需要llm校对标点符号？ Y/N?", default=False):
-        #     original_asr_data = asr_data
-        #     punctuation_optimizer = PunctuationOptimizer(
-        #         thread_num=thread_num,
-        #         model=llm_model,
-        #         max_sentence_word_count=max_sentence_word_count,
-        #     )
-        #     asr_data = punctuation_optimizer.optimize(asr_data)
-        #     _write_stage_diff(
-        #         save_path=paths.punctuation_txt,
-        #         original_text=original_asr_data.to_txt(),
-        #         updated_text=asr_data.to_txt(),
-        #     )
 
         sentence_data = asr_data.to_sentence_data()
 
@@ -110,8 +84,12 @@ def run(args: Namespace, config: dict) -> int:
         )
         translated_lines = translator.translate_subtitle(subtitle_lines)
 
-        write_subtitle_lines_to_srt(translated_lines, paths.src_srt, use_translation=False)
-        write_subtitle_lines_to_srt(translated_lines, paths.trans_srt, use_translation=True)
+        write_subtitle_lines_to_srt(
+            translated_lines, paths.src_srt, use_translation=False
+        )
+        write_subtitle_lines_to_srt(
+            translated_lines, paths.trans_srt, use_translation=True
+        )
 
         output.success(f"Subtitle files saved to {paths.src_srt} and {paths.trans_srt}")
         return EXIT.SUCCESS
@@ -134,7 +112,9 @@ def _load_origin_subtitle_data(paths):
     return ASRData.from_subtitle_file(str(subtitle_path))
 
 
-def _write_stage_diff(*, save_path: Path, original_text: str, updated_text: str) -> None:
+def _write_stage_diff(
+    *, save_path: Path, original_text: str, updated_text: str
+) -> None:
     diff_text = render_inline_diff(
         normalize_whitespace(original_text),
         normalize_whitespace(updated_text),
@@ -145,7 +125,9 @@ def _write_stage_diff(*, save_path: Path, original_text: str, updated_text: str)
     save_path.write_text(diff_text, encoding="utf-8")
 
 
-def _prompt_choice(prompt: str, valid_choices: set[str], default: str | None = None) -> str:
+def _prompt_choice(
+    prompt: str, valid_choices: set[str], default: str | None = None
+) -> str:
     if not sys.stdin.isatty():
         raise RuntimeError(f"stdin is not interactive, cannot prompt: {prompt}")
 
@@ -165,8 +147,11 @@ def _prompt_yes_no(prompt: str, default: bool | None = None) -> bool:
         default_choice = "Y"
     elif default is False:
         default_choice = "N"
-    return _prompt_choice(
-        prompt,
-        {"Y", "y", "N", "n"},
-        default=default_choice,
-    ).lower() == "y"
+    return (
+        _prompt_choice(
+            prompt,
+            {"Y", "y", "N", "n"},
+            default=default_choice,
+        ).lower()
+        == "y"
+    )

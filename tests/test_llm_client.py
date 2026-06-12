@@ -1,5 +1,5 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 
@@ -50,11 +50,17 @@ def _set_work_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return work_dir
 
 
-def test_call_llm_writes_success_log(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_call_llm_writes_success_log(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     work_dir = _set_work_dir(monkeypatch, tmp_path)
-    monkeypatch.setattr(llm_client, "_call_llm_api", lambda *args, **kwargs: _FakeResponse("ok"))
+    monkeypatch.setattr(
+        llm_client, "_call_llm_api", lambda *args, **kwargs: _FakeResponse("ok")
+    )
 
-    response = llm_client.call_llm([{"role": "user", "content": "hello"}], model="demo-model")
+    response = llm_client.call_llm(
+        [{"role": "user", "content": "hello"}], model="demo-model"
+    )
 
     assert response.choices[0].message.content == "ok"
     log_text = (work_dir / "log" / "llm.log").read_text(encoding="utf-8")
@@ -65,7 +71,9 @@ def test_call_llm_writes_success_log(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert '"content": "ok"' in log_text
 
 
-def test_call_llm_writes_error_log_when_api_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_call_llm_writes_error_log_when_api_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     work_dir = _set_work_dir(monkeypatch, tmp_path)
 
     def fail(*_args, **_kwargs):
@@ -84,9 +92,13 @@ def test_call_llm_writes_error_log_when_api_raises(monkeypatch: pytest.MonkeyPat
     assert "error=RuntimeError: boom" in log_text
 
 
-def test_call_llm_writes_error_log_when_response_invalid(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_call_llm_writes_error_log_when_response_invalid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     work_dir = _set_work_dir(monkeypatch, tmp_path)
-    monkeypatch.setattr(llm_client, "_call_llm_api", lambda *args, **kwargs: _FakeInvalidResponse())
+    monkeypatch.setattr(
+        llm_client, "_call_llm_api", lambda *args, **kwargs: _FakeInvalidResponse()
+    )
 
     with pytest.raises(ValueError, match="Invalid OpenAI API response"):
         llm_client.call_llm([{"role": "user", "content": "hello"}], model="demo-model")
@@ -96,10 +108,15 @@ def test_call_llm_writes_error_log_when_response_invalid(monkeypatch: pytest.Mon
     assert "model=demo-model" in log_text
     assert '"content": "hello"' in log_text
     assert '"choices": []' in log_text
-    assert "error=ValueError: Invalid OpenAI API response: empty choices or content" in log_text
+    assert (
+        "error=ValueError: Invalid OpenAI API response: empty choices or content"
+        in log_text
+    )
 
 
-def test_call_llm_cache_hit_does_not_write_duplicate_log(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_call_llm_cache_hit_does_not_write_duplicate_log(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     work_dir = _set_work_dir(monkeypatch, tmp_path)
     calls: list[int] = []
 
@@ -118,10 +135,14 @@ def test_call_llm_cache_hit_does_not_write_duplicate_log(monkeypatch: pytest.Mon
     assert log_text.count("status=success") == 1
 
 
-def test_call_llm_appends_multiple_real_requests(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_call_llm_appends_multiple_real_requests(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     work_dir = _set_work_dir(monkeypatch, tmp_path)
     responses = iter([_FakeResponse("first"), _FakeResponse("second")])
-    monkeypatch.setattr(llm_client, "_call_llm_api", lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(
+        llm_client, "_call_llm_api", lambda *args, **kwargs: next(responses)
+    )
 
     llm_client.call_llm([{"role": "user", "content": "one"}], model="demo-model")
     llm_client.call_llm([{"role": "user", "content": "two"}], model="demo-model")

@@ -23,7 +23,7 @@ def except_handler(error_msg, retry=0, delay=1, default_return=None):
                     if i == retry:
                         if default_return is not None:
                             return default_return
-                        raise last_exception
+                        raise last_exception from None
                     time.sleep(delay * (2**i))
 
         return wrapper
@@ -32,10 +32,7 @@ def except_handler(error_msg, retry=0, delay=1, default_return=None):
 
 
 def _resolve_file_path(file_path: PathResolver, *args, **kwargs) -> str:
-    if callable(file_path):
-        resolved = file_path(*args, **kwargs)
-    else:
-        resolved = file_path
+    resolved = file_path(*args, **kwargs) if callable(file_path) else file_path
     return os.fspath(resolved)
 
 
@@ -43,11 +40,15 @@ def skip_fun_if_file_exist(*file_paths: PathResolver):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            resolved_paths = [_resolve_file_path(fp, *args, **kwargs) for fp in file_paths]
+            resolved_paths = [
+                _resolve_file_path(fp, *args, **kwargs) for fp in file_paths
+            ]
 
             if all(os.path.exists(p) for p in resolved_paths):
                 targets = ", ".join(f"<{p}>" for p in resolved_paths)
-                output.warn(f"File {targets} already exists, skip <{func.__name__}> step.")
+                output.warn(
+                    f"File {targets} already exists, skip <{func.__name__}> step."
+                )
                 return None
             return func(*args, **kwargs)
 

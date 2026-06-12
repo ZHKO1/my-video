@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
 import traceback
+from argparse import Namespace
 
-from my_video.cli import exit_codes as EXIT
-from my_video.cli import output
+from my_video.cli import EXIT, output
 from my_video.cli.config import get_toml_str, get_work_dir
-from my_video.core.utils.helper import write_json
-from my_video.core.workspace import build_workspace_paths, create_workspace
 from my_video.core.download.yt_dlp import DownloadRequest, download, fetch_video_info
-from my_video.core.workspace import update_status_for_workspace
+from my_video.core.utils.helper import write_json
+from my_video.core.workspace import (
+    build_workspace_paths,
+    create_workspace,
+    update_status_for_workspace,
+)
 
 
 def run(args: Namespace, _config: dict) -> int:
@@ -60,11 +62,17 @@ def run(args: Namespace, _config: dict) -> int:
 
         # 记录下载结果
         if result.video_path:
-            update_status_for_workspace(paths.status_path, {"origin": {"video_path": result.video_path}})
+            update_status_for_workspace(
+                paths.status_path, {"origin": {"video_path": result.video_path}}
+            )
         if result.subtitle_path:
-            update_status_for_workspace(paths.status_path, {"origin": {"subtitle_path": result.subtitle_path}})
+            update_status_for_workspace(
+                paths.status_path, {"origin": {"subtitle_path": result.subtitle_path}}
+            )
         if result.thumbnail_path:
-            update_status_for_workspace(paths.status_path, {"origin": {"thumbnail_path": result.thumbnail_path}})
+            update_status_for_workspace(
+                paths.status_path, {"origin": {"thumbnail_path": result.thumbnail_path}}
+            )
 
         update_status_for_workspace(
             paths.status_path,

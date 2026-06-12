@@ -33,19 +33,31 @@ uv sync
 uv sync --group dev
 ```
 
-默认依赖当前包含：
+默认依赖当前包含（运行完整 CLI 流程所需）：
 
 - `audioop-lts`（Python 3.13 下给 `pydub` 提供 `audioop` 兼容层）
+- `numpy`
+- `opencv-python`
 - `openpyxl`
 - `pandas`
 - `pydub`
+- `rapidfuzz`
+- `tenacity`
+- `diskcache`
+- `openai`
+- `json-repair`
+- `torch`
 - `whisperx`
+- `demucs`（通过 direct reference 安装）
 - `yt-dlp`
 
 开发依赖当前包含：
 
 - `pytest`
 - `ruff`
+- `pre-commit`
+
+如果你只想跑测试，不跑完整 CLI，可以使用更轻的 `test` 依赖组（见下方「测试」部分）。
 
 ### 3. 验证安装
 
@@ -61,6 +73,73 @@ my-video --help
 ```bash
 uv run my-video --help
 ```
+
+## 开发与测试
+
+### 安装开发依赖
+
+```bash
+uv sync --group dev
+```
+
+### 代码检查与格式化
+
+项目使用 [Ruff](https://docs.astral.sh/ruff/) 统一处理 lint 和 format。
+
+```bash
+# 检查并自动修复问题
+uv run ruff check --fix .
+
+# 格式化代码
+uv run ruff format .
+```
+
+### 安装 Git 钩子（pre-commit）
+
+commit 前自动跑 Ruff 检查和格式化：
+
+```bash
+uv run pre-commit install
+```
+
+配置里用的是 `repo: local`，会直接调用项目环境里已经装好的 ruff（通过 `uv run ruff ...`），**不需要再联网下载**额外版本的 ruff。
+
+安装后，每次 `git commit` 会先对变更的 Python 文件执行：
+
+```bash
+uv run ruff check --fix <staged-files>
+uv run ruff format <staged-files>
+```
+
+如果 Ruff 自动修复了文件，这次 commit 会被中止，你需要重新 `git add` 并再次 commit。
+
+### 运行测试
+
+**轻量模式**（推荐日常开发，不安装 torch / whisperx / demucs / yt-dlp / opencv 等重型依赖）：
+
+```bash
+uv run --no-default-groups --group test pytest
+```
+
+**完整模式**（和之前一样，使用全部项目依赖）：
+
+```bash
+uv run pytest
+```
+
+当前测试集中不包含需要 whisperx / torch / demucs / yt-dlp 的用例，所以轻量模式即可跑完全部测试。
+
+### CI
+
+仓库已配置 GitHub Actions（`.github/workflows/ci.yml`），在 push / pull_request 时自动执行：
+
+```bash
+uv run --no-default-groups --group dev ruff check .
+uv run --no-default-groups --group dev ruff format --check .
+uv run --no-default-groups --group test pytest
+```
+
+CI 同样使用轻量依赖组，避免安装重型依赖。
 
 ## 可选：安装 demucs
 

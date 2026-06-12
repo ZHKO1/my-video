@@ -1,5 +1,10 @@
-from my_video.core.asr.asr_data import ASRData, ASRDataSeg, ASRSentenceData, SentenceGroup
-from my_video.core.optimize.optimize import OptimizationBatch, SubtitleOptimizer
+from my_video.core.asr.asr_data import (
+    ASRData,
+    ASRDataSeg,
+    ASRSentenceData,
+    SentenceGroup,
+)
+from my_video.core.optimize.optimize import SubtitleOptimizer
 
 
 def make_seg(text: str, start: int, end: int) -> ASRDataSeg:
@@ -27,7 +32,9 @@ class TestSubtitleOptimizerWriteBack:
             make_seg("world", 160, 260),
         ]
 
-        rewritten = SubtitleOptimizer._rewrite_group_segments(segments, "hello brave new world")
+        rewritten = SubtitleOptimizer._rewrite_group_segments(
+            segments, "hello brave new world"
+        )
 
         assert [seg.text for seg in rewritten] == ["hello", "brave", "new", "world"]
         assert [(seg.start_time, seg.end_time) for seg in rewritten] == [
@@ -60,13 +67,19 @@ class TestSubtitleOptimizerWriteBack:
         )
 
         assert groups[0].optimized_text == "alpha beta theta delta epsilon"
-        assert groups[0].optimize_log == "alpha beta 【gamma/theta】 delta epsilon 【zeta eta/∅】"
+        assert (
+            groups[0].optimize_log
+            == "alpha beta 【gamma/theta】 delta epsilon 【zeta eta/∅】"
+        )
         assert rewritten.sentences[0].text == "alpha beta theta delta epsilon"
         assert rewritten.sentences[0].optimized_text == ""
         assert rewritten.sentences[0].optimize_log == ""
 
+
 class TestSubtitleOptimizerFlow:
-    def test_optimize_subtitle_writes_back_to_input_and_returns_clean_object(self, monkeypatch) -> None:
+    def test_optimize_subtitle_writes_back_to_input_and_returns_clean_object(
+        self, monkeypatch
+    ) -> None:
         optimizer = SubtitleOptimizer(
             thread_num=1,
             batch_num=2,
@@ -124,9 +137,12 @@ class TestSubtitleOptimizerFlow:
                 ),
                 SentenceGroup(
                     index=1,
-                    segments=[make_seg("next", 8000, 8100), make_seg("line.", 8100, 8200)],
+                    segments=[
+                        make_seg("next", 8000, 8100),
+                        make_seg("line.", 8100, 8200),
+                    ],
                     text="next line.",
-                )
+                ),
             ]
         )
         reference_data = ASRData(
@@ -139,7 +155,9 @@ class TestSubtitleOptimizerFlow:
             ]
         )
 
-        batches = optimizer._batch_sentence_groups(sentence_data.sentences, reference_data)
+        batches = optimizer._batch_sentence_groups(
+            sentence_data.sentences, reference_data
+        )
 
         assert len(batches) == 2
         assert batches[0].start_time_ms == 0
@@ -169,7 +187,9 @@ class TestSubtitleOptimizerFlow:
         assert batches[0].reference_text == ""
         optimizer.stop()
 
-    def test_agent_loop_includes_plain_reference_block_without_numbering(self, monkeypatch) -> None:
+    def test_agent_loop_includes_plain_reference_block_without_numbering(
+        self, monkeypatch
+    ) -> None:
         optimizer = SubtitleOptimizer(
             thread_num=1,
             batch_num=20,
@@ -193,9 +213,14 @@ class TestSubtitleOptimizerFlow:
 
         monkeypatch.setattr("my_video.core.optimize.optimize.call_llm", fake_call_llm)
 
-        result = optimizer.agent_loop({"0": "hello world."}, "Reference paragraph here.")
+        result = optimizer.agent_loop(
+            {"0": "hello world."}, "Reference paragraph here."
+        )
 
         assert result == {"0": "hello world."}
-        assert "<reference>\nReference paragraph here.\n</reference>" in captured["user_prompt"]
+        assert (
+            "<reference>\nReference paragraph here.\n</reference>"
+            in captured["user_prompt"]
+        )
         assert "0: " not in captured["user_prompt"]
         optimizer.stop()

@@ -3,12 +3,12 @@
 import atexit
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List
 
 from my_video.cli import output
 from my_video.core.asr.asr_data import SubtitleLine
 from my_video.core.translate.types import TargetLanguage
 from my_video.core.utils.cache import generate_cache_key, get_translate_cache
+
 
 class BaseTranslator(ABC):
     """翻译器基类"""
@@ -31,7 +31,9 @@ class BaseTranslator(ABC):
         self.executor = ThreadPoolExecutor(max_workers=self.thread_num)
         atexit.register(self.stop)
 
-    def translate_subtitle(self, subtitle_data: list[SubtitleLine]) -> list[SubtitleLine]:
+    def translate_subtitle(
+        self, subtitle_data: list[SubtitleLine]
+    ) -> list[SubtitleLine]:
         """翻译字幕文件并回写翻译结果。"""
         try:
             chunks = self._batch_subtitle_lines(subtitle_data)
@@ -40,12 +42,10 @@ class BaseTranslator(ABC):
             self._parallel_translate(chunks)
             return subtitle_data
         except Exception as e:
-            output.error(f"Translation failed: {str(e)}")
-            raise RuntimeError(f"Translation failed: {str(e)}")
+            output.error(f"Translation failed: {e!s}")
+            raise RuntimeError(f"Translation failed: {e!s}") from e
 
-    def _parallel_translate(
-        self, chunks: List[list[SubtitleLine]]
-    ) -> None:
+    def _parallel_translate(self, chunks: list[list[SubtitleLine]]) -> None:
         """并行翻译All块。"""
         future_to_chunk = {}
         failed_count = 0
@@ -73,7 +73,9 @@ class BaseTranslator(ABC):
                     f"({fail_rate:.0%}). Check your API key and network connection."
                 )
             elif failed_count > 0:
-                output.warn(f"Translation partially failed: {failed_count}/{total_segments} segments")
+                output.warn(
+                    f"Translation partially failed: {failed_count}/{total_segments} segments"
+                )
 
     def _get_cache_key(self, chunk: list[SubtitleLine]) -> str:
         """生成缓存键"""
@@ -84,9 +86,7 @@ class BaseTranslator(ABC):
         lang = self.target_language.value
         return f"{class_name}:{chunk_key}:{lang}"
 
-    def _safe_translate_chunk(
-        self, chunk: list[SubtitleLine]
-    ) -> list[SubtitleLine]:
+    def _safe_translate_chunk(self, chunk: list[SubtitleLine]) -> list[SubtitleLine]:
         """安全的翻译块"""
         try:
             cache_key = self._get_cache_key(chunk)
@@ -106,7 +106,7 @@ class BaseTranslator(ABC):
             return result
 
         except Exception as e:
-            output.error(f"Translation failed: {str(e)}")
+            output.error(f"Translation failed: {e!s}")
             raise
 
     @abstractmethod
@@ -152,7 +152,11 @@ class BaseTranslator(ABC):
 
         for group_lines in grouped:
             group_index = group_lines[0].group_index
-            if current_batch and current_group_count >= 20 and group_index not in seen_groups:
+            if (
+                current_batch
+                and current_group_count >= 20
+                and group_index not in seen_groups
+            ):
                 batches.append(current_batch)
                 current_batch = []
                 current_group_count = 0
@@ -178,6 +182,6 @@ class BaseTranslator(ABC):
             try:
                 self.executor.shutdown(wait=False, cancel_futures=True)
             except Exception as e:
-                output.error(f"Error closing thread pool: {str(e)}")
+                output.error(f"Error closing thread pool: {e!s}")
             finally:
                 self.executor = None

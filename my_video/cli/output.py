@@ -2,7 +2,6 @@
 
 import sys
 import threading
-from typing import Optional
 
 
 def info(msg: str) -> None:
@@ -25,16 +24,28 @@ def hint(msg: str) -> None:
     """Print a hint message (e.g. how to fix a config issue)."""
     print(f"  {msg}", file=sys.stderr)
 
+
 class ProgressLine:
     """Simple single-line progress indicator for CLI."""
 
-    SPINNER = ["\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f"]
+    SPINNER = [
+        "\u280b",
+        "\u2819",
+        "\u2839",
+        "\u2838",
+        "\u283c",
+        "\u2834",
+        "\u2826",
+        "\u2827",
+        "\u2807",
+        "\u280f",
+    ]
 
     def __init__(self, message: str = ""):
         self.message = message
-        self.percent: Optional[int] = None
+        self.percent: int | None = None
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._frame = 0
         self._is_tty = hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
 

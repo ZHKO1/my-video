@@ -9,12 +9,14 @@ from typing import Any
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)*")
 
+
 @dataclass(frozen=True)
 class Token:
     raw: str
     normalized: str
     start: float | None
     end: float | None
+
 
 @dataclass(frozen=True)
 class Hit:
@@ -73,7 +75,10 @@ class ScanResult:
     @property
     def top_phrases(self) -> list[dict[str, Any]]:
         counts = Counter(hit.phrase for hit in self.hits)
-        return [{"phrase": phrase, "count": count} for phrase, count in counts.most_common(10)]
+        return [
+            {"phrase": phrase, "count": count}
+            for phrase, count in counts.most_common(10)
+        ]
 
     def summary_dict(self) -> dict[str, Any]:
         return {
@@ -138,7 +143,9 @@ def build_segment_tokens(segment: dict[str, Any]) -> list[Token]:
     return tokens
 
 
-def build_excerpt(tokens: list[Token], start_token: int, end_token: int, radius: int = 6) -> str:
+def build_excerpt(
+    tokens: list[Token], start_token: int, end_token: int, radius: int = 6
+) -> str:
     left = max(0, start_token - radius)
     right = min(len(tokens), end_token + radius)
     words = [token.raw for token in tokens[left:right]]
@@ -174,7 +181,10 @@ def scan_repeated_runs(
 
             repeat_count = 1
             cursor = i + phrase_len
-            while cursor + phrase_len <= total and tuple(normalized[cursor : cursor + phrase_len]) == phrase:
+            while (
+                cursor + phrase_len <= total
+                and tuple(normalized[cursor : cursor + phrase_len]) == phrase
+            ):
                 repeat_count += 1
                 cursor += phrase_len
 
@@ -210,7 +220,13 @@ def overlaps(a: Hit, b: Hit) -> bool:
 def dedupe_hits(hits: list[Hit]) -> list[Hit]:
     ordered = sorted(
         hits,
-        key=lambda hit: (-hit.token_count, -hit.phrase_len, -hit.repeat_count, hit.segment_index, hit.start_token),
+        key=lambda hit: (
+            -hit.token_count,
+            -hit.phrase_len,
+            -hit.repeat_count,
+            hit.segment_index,
+            hit.start_token,
+        ),
     )
     selected: list[Hit] = []
     for hit in ordered:
@@ -265,7 +281,13 @@ def format_hallucination_report(result: ScanResult, *, max_examples: int = 30) -
     lines.append(f"hits (showing up to {max_examples}):")
     ranked_hits = sorted(
         result.hits,
-        key=lambda hit: (-hit.token_count, -hit.phrase_len, -hit.repeat_count, hit.segment_index, hit.start_token),
+        key=lambda hit: (
+            -hit.token_count,
+            -hit.phrase_len,
+            -hit.repeat_count,
+            hit.segment_index,
+            hit.start_token,
+        ),
     )
     for hit in ranked_hits[:max_examples]:
         lines.append(

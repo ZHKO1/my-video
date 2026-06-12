@@ -2,6 +2,7 @@ from pathlib import Path
 
 from my_video.core.utils.decorator import skip_fun_if_file_exist
 
+
 def test_skip_fun_if_file_exist_skips_when_dynamic_path_exists(tmp_path: Path) -> None:
     target_file = tmp_path / "output.txt"
     target_file.write_text("done", encoding="utf-8")
@@ -15,7 +16,9 @@ def test_skip_fun_if_file_exist_skips_when_dynamic_path_exists(tmp_path: Path) -
     assert calls == []
 
 
-def test_skip_fun_if_file_exist_single_file_missing_executes_function(tmp_path: Path) -> None:
+def test_skip_fun_if_file_exist_single_file_missing_executes_function(
+    tmp_path: Path,
+) -> None:
     target = tmp_path / "missing.txt"
 
     @skip_fun_if_file_exist(lambda p: p)
@@ -26,7 +29,9 @@ def test_skip_fun_if_file_exist_single_file_missing_executes_function(tmp_path: 
     assert result == f"generated {target}"
 
 
-def test_skip_fun_if_file_exist_single_file_existing_skips_execution(tmp_path: Path) -> None:
+def test_skip_fun_if_file_exist_single_file_existing_skips_execution(
+    tmp_path: Path,
+) -> None:
     target = tmp_path / "exists.txt"
     target.write_text("data")
 
@@ -38,7 +43,9 @@ def test_skip_fun_if_file_exist_single_file_existing_skips_execution(tmp_path: P
     assert result is None
 
 
-def test_skip_fun_if_file_exist_multiple_files_all_missing_executes(tmp_path: Path) -> None:
+def test_skip_fun_if_file_exist_multiple_files_all_missing_executes(
+    tmp_path: Path,
+) -> None:
     a = tmp_path / "a.txt"
     b = tmp_path / "b.txt"
 
@@ -50,7 +57,9 @@ def test_skip_fun_if_file_exist_multiple_files_all_missing_executes(tmp_path: Pa
     assert result == "generated"
 
 
-def test_skip_fun_if_file_exist_multiple_files_partial_existing_executes(tmp_path: Path) -> None:
+def test_skip_fun_if_file_exist_multiple_files_partial_existing_executes(
+    tmp_path: Path,
+) -> None:
     a = tmp_path / "a.txt"
     b = tmp_path / "b.txt"
     a.write_text("data")
@@ -63,7 +72,9 @@ def test_skip_fun_if_file_exist_multiple_files_partial_existing_executes(tmp_pat
     assert result == "generated"
 
 
-def test_skip_fun_if_file_exist_multiple_files_all_existing_skips_execution(tmp_path: Path) -> None:
+def test_skip_fun_if_file_exist_multiple_files_all_existing_skips_execution(
+    tmp_path: Path,
+) -> None:
     a = tmp_path / "a.txt"
     b = tmp_path / "b.txt"
     a.write_text("data")
@@ -131,5 +142,3 @@ def test_skip_fun_if_file_exist_lambda_receives_keyword_args(tmp_path: Path) -> 
 
     result = generate(unused=tmp_path / "unused.txt", output=target)
     assert result == f"generated {target}"
-
-

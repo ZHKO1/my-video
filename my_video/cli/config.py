@@ -1,9 +1,8 @@
 """Configuration helpers for CLI commands."""
 
+import tomllib
 from pathlib import Path
 from typing import Any
-
-import tomllib
 
 
 def _resolve_config_path() -> Path:
@@ -37,7 +36,9 @@ def get_toml_value(config: dict[str, Any], dotted_key: str, default: Any = None)
     return current
 
 
-def get_toml_str(config: dict[str, Any], dotted_key: str, *, default: str | None = None) -> str | None:
+def get_toml_str(
+    config: dict[str, Any], dotted_key: str, *, default: str | None = None
+) -> str | None:
     """Get string value by dotted key."""
     value = get_toml_value(config, dotted_key, default)
     if value is None:

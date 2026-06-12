@@ -5,6 +5,7 @@ from my_video.cli import output
 from my_video.core.asr.audio_preprocess import normalize_audio_volume
 from my_video.core.utils.decorator import skip_fun_if_file_exist
 
+
 @skip_fun_if_file_exist(lambda _, vocal_audio: vocal_audio)
 def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
     try:
@@ -24,7 +25,13 @@ def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
             self._model = model
             self._audio_channels = model.audio_channels
             self._samplerate = model.samplerate
-            device = "cuda" if is_cuda_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            device = (
+                "cuda"
+                if is_cuda_available()
+                else "mps"
+                if torch.backends.mps.is_available()
+                else "cpu"
+            )
             self.update_parameter(
                 device=device,
                 shifts=1,
@@ -64,4 +71,3 @@ def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
 
     output.info("Demucs separation completed")
     normalize_audio_volume(str(vocal_audio), str(vocal_audio), format="wav")
-

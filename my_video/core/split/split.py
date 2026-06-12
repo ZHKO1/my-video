@@ -49,7 +49,9 @@ class SubtitleSplitter:
         self.executor = ThreadPoolExecutor(max_workers=self.thread_num)
         atexit.register(self.stop)
 
-    def split_subtitle(self, sentence_groups: list[SentenceGroup]) -> list[SubtitleLine]:
+    def split_subtitle(
+        self, sentence_groups: list[SentenceGroup]
+    ) -> list[SubtitleLine]:
         requests = [
             SplitRequest(group_index=group.index, text=group.text)
             for group in sentence_groups
@@ -65,7 +67,10 @@ class SubtitleSplitter:
 
     def _batch_requests(self, requests: list[SplitRequest]) -> list[dict[str, str]]:
         return [
-            {str(request.group_index): request.text for request in requests[i : i + self.batch_num]}
+            {
+                str(request.group_index): request.text
+                for request in requests[i : i + self.batch_num]
+            }
             for i in range(0, len(requests), self.batch_num)
         ]
 
@@ -75,7 +80,9 @@ class SubtitleSplitter:
         if not batches:
             return {}
 
-        futures = [self.executor.submit(self._process_batch, batch) for batch in batches]
+        futures = [
+            self.executor.submit(self._process_batch, batch) for batch in batches
+        ]
         split_results: dict[int, list[str]] = {}
 
         for future in as_completed(futures):
@@ -107,12 +114,16 @@ class SubtitleSplitter:
             f"<input_subtitle>{json.dumps(batch, ensure_ascii=False)}</input_subtitle>"
         )
         if self.custom_prompt:
-            user_prompt += f"\nReference content:\n<reference>{self.custom_prompt}</reference>"
+            user_prompt += (
+                f"\nReference content:\n<reference>{self.custom_prompt}</reference>"
+            )
 
         messages = [
             {
                 "role": "system",
-                "content": get_prompt("split/structured", max_word_count=self.max_word_count),
+                "content": get_prompt(
+                    "split/structured", max_word_count=self.max_word_count
+                ),
             },
             {"role": "user", "content": user_prompt},
         ]
@@ -134,11 +145,15 @@ class SubtitleSplitter:
                 if is_valid:
                     parsed_parts = self._parse_split_result(parsed_result)
                     last_result = parsed_parts
-                    is_valid, error_message = self._validate_split_result(batch, parsed_parts)
+                    is_valid, error_message = self._validate_split_result(
+                        batch, parsed_parts
+                    )
                     if is_valid:
                         return parsed_parts
 
-            output.warn(f"分割验证失败，开始反馈循环 (第{step + 1}次尝试): {error_message}")
+            output.warn(
+                f"分割验证失败，开始反馈循环 (第{step + 1}次尝试): {error_message}"
+            )
             messages.append({"role": "assistant", "content": result_text})
             messages.append(
                 {
@@ -151,24 +166,44 @@ class SubtitleSplitter:
             )
 
         output.warn(f"Max attempts reached({MAX_STEPS})，returning last result")
-        return last_result if last_result else {int(key): [text] for key, text in batch.items()}
+        return (
+            last_result
+            if last_result
+            else {int(key): [text] for key, text in batch.items()}
+        )
 
-    def _validate_json(self, parsed_result: Any, batch: dict[str, str]) -> tuple[bool, str]:
+    def _validate_json(
+        self, parsed_result: Any, batch: dict[str, str]
+    ) -> tuple[bool, str]:
         if not isinstance(parsed_result, dict):
-            return False, f"JSON structure error: expected dict, got {type(parsed_result)}"
+            return (
+                False,
+                f"JSON structure error: expected dict, got {type(parsed_result)}",
+            )
         if set(parsed_result.keys()) != set(batch.keys()):
-            return False, "JSON structure error: response keys do not match request keys."
+            return (
+                False,
+                "JSON structure error: response keys do not match request keys.",
+            )
 
         for key, value in parsed_result.items():
             if not isinstance(value, str):
-                return False, f"JSON structure error: value for key {key} must be a string."
+                return (
+                    False,
+                    f"JSON structure error: value for key {key} must be a string.",
+                )
             parts = self._split_response_text(value)
             if not parts:
-                return False, f"JSON structure error: value for key {key} must contain at least one non-empty part."
+                return (
+                    False,
+                    f"JSON structure error: value for key {key} must contain at least one non-empty part.",
+                )
 
         return True, ""
 
-    def _parse_split_result(self, parsed_result: dict[str, str]) -> dict[int, list[str]]:
+    def _parse_split_result(
+        self, parsed_result: dict[str, str]
+    ) -> dict[int, list[str]]:
         return {
             int(key): self._split_response_text(value)
             for key, value in parsed_result.items()
@@ -182,7 +217,10 @@ class SubtitleSplitter:
         for key, original_text in original_batch.items():
             parts = split_chunk.get(int(key))
             if not parts:
-                return False, f"Content validation error: missing split parts for key {key}."
+                return (
+                    False,
+                    f"Content validation error: missing split parts for key {key}.",
+                )
 
             merged = self._join_parts(parts)
             content_feedback = self._build_content_feedback(
@@ -199,20 +237,29 @@ class SubtitleSplitter:
                 if count_words(part) > self.max_word_count
             ]
             if violations:
-                return False, f"Length violations for key {key}: {'; '.join(violations)}"
+                return (
+                    False,
+                    f"Length violations for key {key}: {'; '.join(violations)}",
+                )
 
         return True, ""
 
-    def _build_subtitle_lines(self, group: SentenceGroup, parts: list[str]) -> list[SubtitleLine]:
+    def _build_subtitle_lines(
+        self, group: SentenceGroup, parts: list[str]
+    ) -> list[SubtitleLine]:
         try:
             segment_ranges = self._match_parts_to_segments(group.segments, parts)
         except Exception as exc:
-            output.warn(f"Failed to align split result for group {group.index}, fallback to single line: {exc}")
+            output.warn(
+                f"Failed to align split result for group {group.index}, fallback to single line: {exc}"
+            )
             segment_ranges = [(0, len(group.segments) - 1)]
             parts = [group.text]
 
         lines: list[SubtitleLine] = []
-        for line_index, ((start_idx, end_idx), text) in enumerate(zip(segment_ranges, parts)):
+        for line_index, ((start_idx, end_idx), text) in enumerate(
+            zip(segment_ranges, parts, strict=True)
+        ):
             segs = group.segments[start_idx : end_idx + 1]
             lines.append(
                 SubtitleLine(
@@ -255,7 +302,9 @@ class SubtitleSplitter:
             best_end: int | None = None
 
             for end_idx in range(cursor, candidate_stop):
-                candidate_text = self._segments_to_text(segments[cursor : end_idx + 1], part)
+                candidate_text = self._segments_to_text(
+                    segments[cursor : end_idx + 1], part
+                )
                 score = self._text_similarity(part, candidate_text)
                 if score > best_score:
                     best_score = score
@@ -281,7 +330,9 @@ class SubtitleSplitter:
             return "".join(texts)
         return " ".join(texts)
 
-    def _build_content_feedback(self, original: str, merged: str, *, label: str) -> str | None:
+    def _build_content_feedback(
+        self, original: str, merged: str, *, label: str
+    ) -> str | None:
         similarity = self._text_similarity(original, merged)
         if similarity >= CONTENT_SIMILARITY_THRESHOLD:
             return None

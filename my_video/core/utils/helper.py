@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 TOKEN_SPLIT_PATTERN = re.compile(r"\s+")
 TRAILING_PUNCTUATION_PATTERN = re.compile(r"[^\w]+$")
 EDGE_PUNCTUATION_PATTERN = re.compile(r"^[^\w]+|[^\w]+$")
@@ -29,7 +28,9 @@ def read_json(path: str | Path) -> dict[str, Any] | None:
 def write_json(path: str | Path, data: dict[str, Any]) -> None:
     file_path = Path(path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    file_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def read_json_source(source: str | Path | dict[str, Any]) -> dict[str, Any]:
@@ -73,14 +74,20 @@ def split_token_parts(token: str, allowed_punctuation: str | None = None) -> Tok
     stripped = token.strip()
     if allowed_punctuation is None:
         trailing_punctuation_match = TRAILING_PUNCTUATION_PATTERN.search(stripped)
-        trailing_punctuation = trailing_punctuation_match.group(0) if trailing_punctuation_match else ""
+        trailing_punctuation = (
+            trailing_punctuation_match.group(0) if trailing_punctuation_match else ""
+        )
     else:
         suffix_start = len(stripped)
         while suffix_start > 0 and stripped[suffix_start - 1] in allowed_punctuation:
             suffix_start -= 1
         trailing_punctuation = stripped[suffix_start:]
 
-    base = stripped[: len(stripped) - len(trailing_punctuation)] if trailing_punctuation else stripped
+    base = (
+        stripped[: len(stripped) - len(trailing_punctuation)]
+        if trailing_punctuation
+        else stripped
+    )
     return TokenParts(
         original=stripped,
         base=base,

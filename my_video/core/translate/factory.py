@@ -1,6 +1,5 @@
 """翻译器工厂"""
 
-
 from my_video.cli import output
 from my_video.core.translate.base import BaseTranslator
 from my_video.core.translate.llm_translator import LLMTranslator
@@ -22,12 +21,12 @@ class TranslatorFactory:
             target_language = TargetLanguage.SIMPLIFIED_CHINESE
 
             return LLMTranslator(
-                    thread_num=thread_num,
-                    target_language=target_language,
-                    model=model,
-                    custom_prompt=custom_prompt,
-                    is_reflect=is_reflect,
-                )
+                thread_num=thread_num,
+                target_language=target_language,
+                model=model,
+                custom_prompt=custom_prompt,
+                is_reflect=is_reflect,
+            )
         except Exception as e:
-            output.error(f"Failed to create translator: {str(e)}")
+            output.error(f"Failed to create translator: {e!s}")
             raise

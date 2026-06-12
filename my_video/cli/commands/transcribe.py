@@ -1,21 +1,24 @@
 """transcribe command — convert audio/video to subtitles via ASR."""
 
+import traceback
 from argparse import Namespace
 from pathlib import Path
-import traceback
 
-from my_video.cli import exit_codes as EXIT
-from my_video.cli import output
+from my_video.cli import EXIT, output
 from my_video.cli.config import get_toml_str, get_toml_value
 from my_video.core.asr.audio_preprocess import (
     convert_video_to_audio,
     save_srt,
 )
 from my_video.core.asr.demucs import demucs_audio
-from my_video.core.asr.hallucination import format_hallucination_report, scan_whisperx_hallucinations
+from my_video.core.asr.hallucination import (
+    format_hallucination_report,
+    scan_whisperx_hallucinations,
+)
 from my_video.core.asr.whisperx_local import whisperx_audio
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
+
 
 def run(args: Namespace, config: dict) -> int:
     workspace_path = Path(args.workspace_path).expanduser()
@@ -40,7 +43,7 @@ def run(args: Namespace, config: dict) -> int:
 
     paths = build_workspace_paths(workspace_path)
     if paths.whisperx_json.exists():
-        output.success(f"{str(paths.whisperx_json)} is existed")
+        output.success(f"{paths.whisperx_json!s} is existed")
         return EXIT.SUCCESS
 
     try:
@@ -53,16 +56,24 @@ def run(args: Namespace, config: dict) -> int:
         if get_toml_value(config, "transcribe.demucs", True):
             demucs_audio(paths.raw_audio, paths.vocal_audio)
             input_audio = paths.vocal_audio
-    
+
         # 3. Transcribe audio
-        whisper_language = get_toml_str(config, "transcribe.whisperx.language", default="en")
-        model_name = get_toml_str(config, "transcribe.whisperx.model", default="large-v3-turbo")
+        whisper_language = get_toml_str(
+            config, "transcribe.whisperx.language", default="en"
+        )
+        model_name = get_toml_str(
+            config, "transcribe.whisperx.model", default="large-v3-turbo"
+        )
         model_dir = get_toml_str(config, "transcribe.whisperx.model_dir")
-        whisperx_audio(input_audio, paths.whisperx_json, whisper_language, model_name, model_dir)
+        whisperx_audio(
+            input_audio, paths.whisperx_json, whisper_language, model_name, model_dir
+        )
 
         hallucination_result = scan_whisperx_hallucinations(paths.whisperx_json)
         if hallucination_result.has_hallucination:
-            output.warn(format_hallucination_report(hallucination_result, max_examples=5))
+            output.warn(
+                format_hallucination_report(hallucination_result, max_examples=5)
+            )
             # raise RuntimeError(f"WhisperX hallucination detected in {paths.whisperx_json}")
 
         whisperx_data = read_json(paths.whisperx_json)

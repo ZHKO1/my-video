@@ -4,17 +4,19 @@
 """
 
 import atexit
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-import json
-from typing import Dict, List, Optional, Tuple
 
 import json_repair
 from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
-from my_video.core.asr.text_diff import render_inline_diff, rewrite_segments_with_timestamps
-from my_video.core.utils.text_utils import count_words, is_mainly_cjk
+from my_video.core.asr.text_diff import (
+    render_inline_diff,
+    rewrite_segments_with_timestamps,
+)
+from my_video.core.utils.text_utils import count_words
 
 from ..asr.asr_data import (
     ASRData,
@@ -24,7 +26,12 @@ from ..asr.asr_data import (
 )
 from ..llm import call_llm
 from ..prompts import get_prompt
-from ..utils.helper import comparison_bases_from_text, comparison_bases_from_tokens, split_token_parts, split_tokens
+from ..utils.helper import (
+    comparison_bases_from_text,
+    comparison_bases_from_tokens,
+    split_token_parts,
+    split_tokens,
+)
 
 MAX_STEPS = 3
 REFERENCE_TIME_PADDING_MS = 5000
@@ -32,8 +39,8 @@ REFERENCE_TIME_PADDING_MS = 5000
 
 @dataclass
 class OptimizationBatch:
-    groups: List[SentenceGroup]
-    subtitle_chunk: Dict[str, str]
+    groups: list[SentenceGroup]
+    subtitle_chunk: dict[str, str]
     reference_text: str
     start_time_ms: int
     end_time_ms: int
@@ -70,7 +77,7 @@ class SubtitleOptimizer:
         self.custom_prompt = custom_prompt
 
         self.is_running = True
-        self.executor: Optional[ThreadPoolExecutor] = None
+        self.executor: ThreadPoolExecutor | None = None
         self._init_thread_pool()
 
     def _init_thread_pool(self) -> None:
@@ -94,15 +101,15 @@ class SubtitleOptimizer:
             return self._write_back_groups(sentence_groups, optimized_dict)
 
         except Exception as e:
-            output.error(f"Optimization failed: {str(e)}")
-            raise RuntimeError(f"Optimization failed: {str(e)}")
+            output.error(f"Optimization failed: {e!s}")
+            raise RuntimeError(f"Optimization failed: {e!s}") from e
 
     def _batch_sentence_groups(
         self,
-        groups: List[SentenceGroup],
+        groups: list[SentenceGroup],
         reference_data: ASRData | None = None,
-    ) -> List[OptimizationBatch]:
-        batches: List[OptimizationBatch] = []
+    ) -> list[OptimizationBatch]:
+        batches: list[OptimizationBatch] = []
         for index in range(0, len(groups), self.batch_num):
             batch_groups = groups[index : index + self.batch_num]
             if not batch_groups:
@@ -147,7 +154,7 @@ class SubtitleOptimizer:
         ]
         return " ".join(matched_segments)
 
-    def _parallel_optimize(self, batches: List[OptimizationBatch]) -> Dict[str, str]:
+    def _parallel_optimize(self, batches: list[OptimizationBatch]) -> dict[str, str]:
         """并行优化All批次
 
         Args:
@@ -160,7 +167,7 @@ class SubtitleOptimizer:
             raise ValueError("Thread pool not initialized")
 
         futures = []
-        optimized_dict: Dict[str, str] = {}
+        optimized_dict: dict[str, str] = {}
 
         # 提交All任务
         for batch in batches:
@@ -176,12 +183,12 @@ class SubtitleOptimizer:
                 result = future.result()
                 optimized_dict.update(result)
             except Exception as e:
-                output.error(f"Optimization batch failed: {str(e)}")
+                output.error(f"Optimization batch failed: {e!s}")
                 optimized_dict.update(batch.subtitle_chunk)  # 失败时保留原文
 
         return optimized_dict
 
-    def _optimize_chunk(self, batch: OptimizationBatch) -> Dict[str, str]:
+    def _optimize_chunk(self, batch: OptimizationBatch) -> dict[str, str]:
         """优化单个字幕批次
 
         Args:
@@ -200,14 +207,14 @@ class SubtitleOptimizer:
             return result
 
         except Exception as e:
-            output.error(f"Optimization failed: {str(e)}")
+            output.error(f"Optimization failed: {e!s}")
             return batch.subtitle_chunk
 
     def agent_loop(
         self,
-        subtitle_chunk: Dict[str, str],
+        subtitle_chunk: dict[str, str],
         reference_text: str,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """使用agent loop优化字幕
 
         LLM → 验证 → 反馈 → 重试 (最多MAX_STEPS次)
@@ -226,9 +233,15 @@ class SubtitleOptimizer:
             f"Correct the following subtitles. Keep the original language, do not translate:\n"
             f"<input_subtitle>{json.dumps(subtitle_chunk, ensure_ascii=False)}</input_subtitle>"
         )
-        reference_parts = [part.strip() for part in [reference_text, self.custom_prompt] if part.strip()]
+        reference_parts = [
+            part.strip()
+            for part in [reference_text, self.custom_prompt]
+            if part.strip()
+        ]
         if reference_parts:
-            user_prompt += "\n<reference>\n" + "\n".join(reference_parts) + "\n</reference>"
+            user_prompt += (
+                "\n<reference>\n" + "\n".join(reference_parts) + "\n</reference>"
+            )
 
         messages = [
             {"role": "system", "content": get_prompt("optimize/subtitle")},
@@ -257,7 +270,7 @@ class SubtitleOptimizer:
                     f"LLM返回结果类型Error，期望dict，实际{type(parsed_result)}"
                 )
 
-            result_dict: Dict[str, str] = parsed_result
+            result_dict: dict[str, str] = parsed_result
             last_result = result_dict
 
             # 验证结果
@@ -288,8 +301,8 @@ class SubtitleOptimizer:
         return last_result if last_result else subtitle_chunk
 
     def _validate_optimization_result(
-        self, original_chunk: Dict[str, str], optimized_chunk: Dict[str, str]
-    ) -> Tuple[bool, str]:
+        self, original_chunk: dict[str, str], optimized_chunk: dict[str, str]
+    ) -> tuple[bool, str]:
         """验证优化结果
 
         检查:
@@ -369,10 +382,10 @@ class SubtitleOptimizer:
     @classmethod
     def _write_back_groups(
         cls,
-        sentence_groups: List[SentenceGroup],
-        optimized_dict: Dict[str, str],
+        sentence_groups: list[SentenceGroup],
+        optimized_dict: dict[str, str],
     ) -> ASRSentenceData:
-        new_groups: List[SentenceGroup] = []
+        new_groups: list[SentenceGroup] = []
         for group in sentence_groups:
             optimized_text = optimized_dict.get(str(group.index))
             if optimized_text is None or not optimized_text.strip():
@@ -404,7 +417,9 @@ class SubtitleOptimizer:
                 continue
 
             optimize_log = cls._build_group_change_log(group.text, optimized_text)
-            rewritten_segments = cls._rewrite_group_segments(group.segments, optimized_text)
+            rewritten_segments = cls._rewrite_group_segments(
+                group.segments, optimized_text
+            )
             group.optimized_text = optimized_text
             group.optimize_log = optimize_log
             new_groups.append(
@@ -421,9 +436,9 @@ class SubtitleOptimizer:
     @classmethod
     def _rewrite_group_segments(
         cls,
-        original_segments: List[ASRDataSeg],
+        original_segments: list[ASRDataSeg],
         optimized_text: str,
-    ) -> List[ASRDataSeg]:
+    ) -> list[ASRDataSeg]:
         return rewrite_segments_with_timestamps(
             original_segments,
             optimized_text,
@@ -441,7 +456,7 @@ class SubtitleOptimizer:
         return "" if log == " ".join(split_tokens(optimized_text.strip())) else log
 
     @staticmethod
-    def _copy_segments(segments: List[ASRDataSeg]) -> List[ASRDataSeg]:
+    def _copy_segments(segments: list[ASRDataSeg]) -> list[ASRDataSeg]:
         return [
             ASRDataSeg(
                 text=segment.text,
@@ -459,7 +474,7 @@ class SubtitleOptimizer:
         text: str,
         optimized_text: str,
         optimize_log: str,
-        segments: List[ASRDataSeg],
+        segments: list[ASRDataSeg],
     ) -> SentenceGroup:
         return SentenceGroup(
             index=group.index,
@@ -483,7 +498,7 @@ class SubtitleOptimizer:
         for tag, i1, i2, j1, j2 in opcodes:
             if tag != "equal":
                 continue
-            for old_index, new_index in zip(range(i1, i2), range(j1, j2)):
+            for old_index, new_index in zip(range(i1, i2), range(j1, j2), strict=True):
                 if (
                     original_parts[old_index].original.lower()
                     != optimized_parts[new_index].original.lower()

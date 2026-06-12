@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from my_video.core.asr.asr_data import ASRData, ASRDataSeg, ASRSentenceData, SentenceGroup, build_sentence_groups
+from my_video.core.asr.asr_data import (
+    ASRData,
+    ASRDataSeg,
+    ASRSentenceData,
+    SentenceGroup,
+    build_sentence_groups,
+)
 
 
 class TestFromWhisperxJson:
@@ -13,7 +19,12 @@ class TestFromWhisperxJson:
             json.dumps(
                 {
                     "word_segments": [
-                        {"word": "Hello,", "start": 0.091, "end": 0.451, "score": 0.703},
+                        {
+                            "word": "Hello,",
+                            "start": 0.091,
+                            "end": 0.451,
+                            "score": 0.703,
+                        },
                         {"word": "world", "start": 0.5, "end": 0.9, "score": 0.812},
                     ]
                 }
@@ -180,7 +191,10 @@ class TestAsrDataJson:
         payload = asr_data.to_json(json_path)
         restored = ASRData.from_json(payload)
 
-        assert json.loads(json_path.read_text(encoding="utf-8"))["segments"][0]["text"] == "hello"
+        assert (
+            json.loads(json_path.read_text(encoding="utf-8"))["segments"][0]["text"]
+            == "hello"
+        )
         assert [seg.text for seg in restored.segments] == ["hello", "world"]
 
     def test_to_sentence_data_round_trip(self, tmp_path: Path) -> None:
@@ -217,7 +231,9 @@ class TestAsrDataJson:
 
         assert restored.sentences[0].text == "hello world"
 
-    def test_to_txt_prefers_optimized_text_and_writes_logs(self, tmp_path: Path) -> None:
+    def test_to_txt_prefers_optimized_text_and_writes_logs(
+        self, tmp_path: Path
+    ) -> None:
         sentence_data = ASRSentenceData(
             [
                 SentenceGroup(

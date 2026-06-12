@@ -1,20 +1,20 @@
 import json
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-import re
-from typing import Any, Callable, List, TypeVar
+from typing import Any
 
 from my_video.core.utils.helper import read_json_source, write_json_source
 from my_video.core.utils.text_utils import count_words
 
 SENTENCE_END_PATTERN = re.compile(r"[?!.？！。]+$")
-T = TypeVar("T")
 
 
 @dataclass
 class SentenceGroup:
     index: int
-    segments: List["ASRDataSeg"]
+    segments: list["ASRDataSeg"]
     text: str
     optimized_text: str = ""
     optimize_log: str = ""
@@ -22,7 +22,7 @@ class SentenceGroup:
     def check_segment_gaps(self, max_gap_ms: int = 2000) -> tuple[bool, list[int]]:
         gap_positions: list[int] = []
         for position, (previous_seg, current_seg) in enumerate(
-            zip(self.segments, self.segments[1:]),
+            zip(self.segments, self.segments[1:], strict=False),
             start=1,
         ):
             if current_seg.start_time - previous_seg.end_time > max_gap_ms:
@@ -42,13 +42,13 @@ class SentenceGroup:
         return "".join(parts)
 
 
-def batch_items_by_word_count(
-    items: List[T],
+def batch_items_by_word_count[T](
+    items: list[T],
     get_text: Callable[[T], str],
     threshold: int,
-) -> List[List[T]]:
-    batches: List[List[T]] = []
-    current_batch: List[T] = []
+) -> list[list[T]]:
+    batches: list[list[T]] = []
+    current_batch: list[T] = []
     current_count = 0
 
     for item in items:
@@ -67,9 +67,9 @@ def batch_items_by_word_count(
     return batches
 
 
-def build_sentence_groups(segments: List["ASRDataSeg"]) -> List[SentenceGroup]:
-    groups: List[SentenceGroup] = []
-    current_group: List[ASRDataSeg] = []
+def build_sentence_groups(segments: list["ASRDataSeg"]) -> list[SentenceGroup]:
+    groups: list[SentenceGroup] = []
+    current_group: list[ASRDataSeg] = []
 
     for seg in segments:
         current_group.append(seg)
@@ -96,9 +96,9 @@ def build_sentence_groups(segments: List["ASRDataSeg"]) -> List[SentenceGroup]:
 
 
 def batch_sentence_groups(
-    groups: List[SentenceGroup],
+    groups: list[SentenceGroup],
     threshold: int = 500,
-) -> List[List[SentenceGroup]]:
+) -> list[list[SentenceGroup]]:
     return batch_items_by_word_count(
         groups,
         get_text=lambda group: group.text,
@@ -177,7 +177,9 @@ class ASRSentenceData:
     def to_txt(self, save_path: str | Path | None = None) -> str:
         lines: list[str] = []
         for sentence in self.sentences:
-            lines.append(f"{sentence.index}. {sentence.optimize_log or sentence.optimized_text or sentence.text}")
+            lines.append(
+                f"{sentence.index}. {sentence.optimize_log or sentence.optimized_text or sentence.text}"
+            )
 
         text = "\n".join(lines)
         if save_path is not None:
@@ -234,7 +236,7 @@ class ASRSentenceData:
 
 
 class ASRData:
-    def __init__(self, segments: List[ASRDataSeg]):
+    def __init__(self, segments: list[ASRDataSeg]):
         filtered_segments = [seg for seg in segments if seg.text and seg.text.strip()]
         filtered_segments.sort(key=lambda x: x.start_time)
         self.segments = filtered_segments
@@ -422,7 +424,11 @@ class ASRData:
         for block in blocks:
             stripped = block.strip()
             if not header_done:
-                if stripped.startswith("WEBVTT") or stripped.startswith("NOTE") or stripped.startswith("STYLE"):
+                if (
+                    stripped.startswith("WEBVTT")
+                    or stripped.startswith("NOTE")
+                    or stripped.startswith("STYLE")
+                ):
                     continue
                 header_done = True
             if stripped:
@@ -456,12 +462,16 @@ class ASRData:
             groups = match.groups()
             time_parts = [int(g) if g is not None else 0 for g in groups]
             start_time = (
-                time_parts[0] * 3600000 + time_parts[1] * 60000 +
-                time_parts[2] * 1000 + time_parts[3]
+                time_parts[0] * 3600000
+                + time_parts[1] * 60000
+                + time_parts[2] * 1000
+                + time_parts[3]
             )
             end_time = (
-                time_parts[4] * 3600000 + time_parts[5] * 60000 +
-                time_parts[6] * 1000 + time_parts[7]
+                time_parts[4] * 3600000
+                + time_parts[5] * 60000
+                + time_parts[6] * 1000
+                + time_parts[7]
             )
 
             text_line = " ".join(lines[text_start:])
@@ -491,7 +501,7 @@ class ASRData:
             h, m, s = ts.split(":")
             return int(float(h) * 3600000 + float(m) * 60000 + float(s) * 1000)
 
-        def split_timestamped_text(text: str) -> List[ASRDataSeg]:
+        def split_timestamped_text(text: str) -> list[ASRDataSeg]:
             """Extract word segments from timestamped text"""
             pattern = re.compile(r"<(\d{2}:\d{2}:\d{2}\.\d{3})>([^<]*)")
             matches = list(pattern.finditer(text))

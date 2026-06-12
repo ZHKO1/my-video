@@ -31,7 +31,9 @@ def _validate_summary_payload(payload: Any) -> dict[str, Any]:
         src = term.get("src")
         tgt = term.get("tgt")
         if not isinstance(src, str) or not isinstance(tgt, str):
-            raise ValueError(f"Term at index {index} must contain string fields 'src' and 'tgt'")
+            raise ValueError(
+                f"Term at index {index} must contain string fields 'src' and 'tgt'"
+            )
         normalized_terms.append({"src": src, "tgt": tgt})
 
     return {

@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
+import subprocess
+import time
 from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
-import subprocess
-import time
 from zoneinfo import ZoneInfo
 
 import cv2
 
-from my_video.cli import exit_codes as EXIT
-from my_video.cli import output
+from my_video.cli import EXIT, output
 from my_video.cli.config import get_toml_value
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import WorkspacePaths, build_workspace_paths
@@ -23,7 +22,9 @@ SRC_FONT_SIZE = 13
 TRANS_FONT_SIZE = 15
 FONT_NAME = "SourceHanSansSC-Regular"
 TRANS_FONT_NAME = "SourceHanSansSC-Regular"
-FONT_FILE_PATH = str(Path(__file__).resolve().parents[2] / "assets" / "SourceHanSansSC-Regular.otf")
+FONT_FILE_PATH = str(
+    Path(__file__).resolve().parents[2] / "assets" / "SourceHanSansSC-Regular.otf"
+)
 FONT_DIR_PATH = str(Path(FONT_FILE_PATH).parent)
 
 SRC_FONT_COLOR = "&HFFFFFF"
@@ -38,14 +39,21 @@ TRANS_BACK_COLOR = "&H33000000"
 
 def check_gpu_available() -> bool:
     try:
-        result = subprocess.run(["ffmpeg", "-encoders"], capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            ["ffmpeg", "-encoders"], capture_output=True, text=True, check=False
+        )
     except Exception:
         return False
     return "h264_nvenc" in result.stdout
 
 
 def _escape_subtitle_path(path: Path) -> str:
-    return str(path.resolve()).replace("\\", "\\\\").replace(":", "\\:").replace("'", r"\'")
+    return (
+        str(path.resolve())
+        .replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", r"\'")
+    )
 
 
 def merge_subtitles_to_video(
@@ -105,7 +113,9 @@ def merge_subtitles_to_video(
             output.info("Using GPU acceleration via h264_nvenc")
             ffmpeg_cmd.extend(["-c:v", "h264_nvenc"])
         else:
-            output.warn("synthesize.ffmpeg_gpu is enabled, but h264_nvenc is unavailable; falling back to CPU encoding.")
+            output.warn(
+                "synthesize.ffmpeg_gpu is enabled, but h264_nvenc is unavailable; falling back to CPU encoding."
+            )
 
     ffmpeg_cmd.extend(["-y", str(output_path)])
 
@@ -121,9 +131,13 @@ def merge_subtitles_to_video(
         raise RuntimeError(f"FFmpeg execution interrupted: {exc}") from exc
 
     if process.returncode != 0:
-        raise RuntimeError(f"FFmpeg execution failed with exit code {process.returncode}")
+        raise RuntimeError(
+            f"FFmpeg execution failed with exit code {process.returncode}"
+        )
 
-    output.success(f"Subtitle merge complete in {time.time() - start_time:.2f}s -> {output_path}")
+    output.success(
+        f"Subtitle merge complete in {time.time() - start_time:.2f}s -> {output_path}"
+    )
 
 
 def _generate_output_md(paths: WorkspacePaths) -> None:
@@ -150,7 +164,9 @@ def _generate_output_md(paths: WorkspacePaths) -> None:
     try:
         timestamp = int(raw_ts)
     except (ValueError, TypeError) as exc:
-        raise RuntimeError(f"release_timestamp is not a valid integer: {raw_ts!r}") from exc
+        raise RuntimeError(
+            f"release_timestamp is not a valid integer: {raw_ts!r}"
+        ) from exc
 
     dt = datetime.fromtimestamp(timestamp, _BEIJING_TZ)
     release_date = f"{dt.year}年{dt.month}月{dt.day}日"

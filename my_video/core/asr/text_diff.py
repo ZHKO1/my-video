@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import re
 from typing import Literal
 
@@ -7,7 +8,6 @@ from rapidfuzz.distance import Levenshtein
 
 from my_video.core.asr.asr_data import ASRDataSeg
 from my_video.core.utils.helper import comparison_bases_from_tokens, split_tokens
-
 
 DiffMode = Literal["strict", "relaxed"]
 DisplayMode = Literal["reference", "candidate"]
@@ -86,7 +86,11 @@ def render_inline_diff(
     rendered: list[str] = []
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
-            tokens = reference_tokens[i1:i2] if display == "reference" else candidate_tokens[j1:j2]
+            tokens = (
+                reference_tokens[i1:i2]
+                if display == "reference"
+                else candidate_tokens[j1:j2]
+            )
             rendered.extend(tokens)
             continue
 
@@ -121,10 +125,13 @@ def rewrite_segments_with_timestamps(
     rewritten_segments: list[ASRDataSeg] = []
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
-            for old_index, new_index in zip(range(i1, i2), range(j1, j2)):
+            for old_index, new_index in zip(range(i1, i2), range(j1, j2), strict=True):
                 start_time, end_time = segment_overrides.get(
                     old_index,
-                    (original_segments[old_index].start_time, original_segments[old_index].end_time),
+                    (
+                        original_segments[old_index].start_time,
+                        original_segments[old_index].end_time,
+                    ),
                 )
                 rewritten_segments.append(
                     ASRDataSeg(
@@ -179,16 +186,24 @@ def _build_insert_segments(
         return []
 
     left_anchor = original_segments[insert_at - 1] if insert_at > 0 else None
-    right_anchor = original_segments[insert_at] if insert_at < len(original_segments) else None
+    right_anchor = (
+        original_segments[insert_at] if insert_at < len(original_segments) else None
+    )
 
     if left_anchor and right_anchor and right_anchor.start_time > left_anchor.end_time:
-        time_ranges = _split_time_range(left_anchor.end_time, right_anchor.start_time, insert_count)
+        time_ranges = _split_time_range(
+            left_anchor.end_time, right_anchor.start_time, insert_count
+        )
     elif right_anchor is not None:
-        time_ranges = _split_time_range(right_anchor.start_time, right_anchor.end_time, insert_count + 1)
+        time_ranges = _split_time_range(
+            right_anchor.start_time, right_anchor.end_time, insert_count + 1
+        )
         segment_overrides[insert_at] = time_ranges[-1]
         time_ranges = time_ranges[:-1]
     elif left_anchor is not None:
-        time_ranges = _split_time_range(left_anchor.start_time, left_anchor.end_time, insert_count + 1)
+        time_ranges = _split_time_range(
+            left_anchor.start_time, left_anchor.end_time, insert_count + 1
+        )
         segment_overrides[insert_at - 1] = time_ranges[0]
         time_ranges = time_ranges[1:]
     else:
@@ -200,7 +215,9 @@ def _build_insert_segments(
             start_time=start_time,
             end_time=end_time,
         )
-        for token_index, (start_time, end_time) in zip(range(token_start, token_end), time_ranges)
+        for token_index, (start_time, end_time) in zip(
+            range(token_start, token_end), time_ranges, strict=True
+        )
     ]
 
 
@@ -221,10 +238,13 @@ def _build_replace_segments(
 
     if old_count == new_count and old_count > 0:
         return [
-            _copy_segment_with_text(original_segments[old_index], target_tokens[token_index])
+            _copy_segment_with_text(
+                original_segments[old_index], target_tokens[token_index]
+            )
             for old_index, token_index in zip(
                 range(original_start, original_end),
                 range(token_start, token_end),
+                strict=True,
             )
         ]
 
@@ -248,7 +268,9 @@ def _build_replace_segments(
             start_time=start_time,
             end_time=end_time,
         )
-        for token_index, (start_time, end_time) in zip(range(token_start, token_end), time_ranges)
+        for token_index, (start_time, end_time) in zip(
+            range(token_start, token_end), time_ranges, strict=True
+        )
     ]
 
 
@@ -260,7 +282,9 @@ def _copy_segment_with_text(segment: ASRDataSeg, text: str) -> ASRDataSeg:
     )
 
 
-def _split_time_range(start_time: int, end_time: int, count: int) -> list[tuple[int, int]]:
+def _split_time_range(
+    start_time: int, end_time: int, count: int
+) -> list[tuple[int, int]]:
     if count <= 0:
         return []
     if count == 1:
@@ -268,14 +292,13 @@ def _split_time_range(start_time: int, end_time: int, count: int) -> list[tuple[
 
     total = end_time - start_time
     points = [start_time + (total * index) // count for index in range(count + 1)]
-    return list(zip(points[:-1], points[1:]))
+    return list(itertools.pairwise(points))
 
 
 def _render_edit_markers(old_tokens: list[str], new_tokens: list[str]) -> list[str]:
     pair_count = min(len(old_tokens), len(new_tokens))
     rendered = [
-        f"【{old_tokens[index]}/{new_tokens[index]}】"
-        for index in range(pair_count)
+        f"【{old_tokens[index]}/{new_tokens[index]}】" for index in range(pair_count)
     ]
 
     if len(old_tokens) > pair_count:

@@ -1,40 +1,50 @@
-from pathlib import Path
 import subprocess
-from typing import List, Tuple
+from pathlib import Path
 
-import pandas as pd
 from pydub import AudioSegment
-from pydub.silence import detect_silence
-from pydub.utils import mediainfo
 
-from my_video.core.utils.decorator import skip_fun_if_file_exist
-from my_video.core.utils.helper import read_json
 from my_video.cli import output
+from my_video.core.utils.decorator import skip_fun_if_file_exist
+
 
 def _ffmpeg_has_encoder(encoder_name: str) -> bool:
     """Check if the current ffmpeg installation supports a given audio encoder."""
     try:
         result = subprocess.run(
-            ['ffmpeg', '-encoders'], capture_output=True, text=True, timeout=10
+            ["ffmpeg", "-encoders"], capture_output=True, text=True, timeout=10
         )
         return encoder_name in result.stdout
     except Exception:
         return False
+
 
 @skip_fun_if_file_exist(lambda _, audio_path: audio_path)
 def convert_video_to_audio(video_path: str, audio_path: str):
     audio_path = Path(audio_path)
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     output.info("Converting to high quality audio with FFmpeg ......")
-    if _ffmpeg_has_encoder('libmp3lame'):
+    if _ffmpeg_has_encoder("libmp3lame"):
         cmd = [
-            'ffmpeg', '-y', '-i', video_path, '-vn',
-            '-c:a', 'libmp3lame', '-b:a', '32k',
-            '-ar', '16000', '-ac', '1',
-            '-metadata', 'encoding=UTF-8', str(audio_path)
+            "ffmpeg",
+            "-y",
+            "-i",
+            video_path,
+            "-vn",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "32k",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "-metadata",
+            "encoding=UTF-8",
+            str(audio_path),
         ]
     subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
     output.info(f"Converted <{video_path}> to <{audio_path}> with FFmpeg")
+
 
 def normalize_audio_volume(
     audio_path: str,
@@ -48,6 +58,7 @@ def normalize_audio_volume(
     normalized_audio.export(output_path, format=format)
     output.info(f"Normalized audio from {audio.dBFS:.1f}dB to {target_db:.1f}dB")
     return output_path
+
 
 def save_srt(segments: list[dict], output_path: Path) -> None:
     def _fmt(ts: float) -> str:
@@ -66,4 +77,4 @@ def save_srt(segments: list[dict], output_path: Path) -> None:
             f.write(f"{_fmt(segment['start'])} --> {_fmt(segment['end'])}\n")
             f.write(f"{text}\n\n")
 
-    output.info(f"Subtitle file saved to {str(output_path)}")
+    output.info(f"Subtitle file saved to {output_path!s}")

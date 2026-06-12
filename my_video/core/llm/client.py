@@ -5,7 +5,7 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import openai
@@ -22,10 +22,9 @@ from my_video.cli import output
 from my_video.cli.config import get_work_dir, load_toml_config
 from my_video.core.utils.cache import get_llm_cache, memoize
 
-_global_client: Optional[OpenAI] = None
+_global_client: OpenAI | None = None
 _client_lock = threading.Lock()
 _log_lock = threading.Lock()
-
 
 
 def normalize_base_url(base_url: str) -> str:
@@ -107,7 +106,14 @@ def _format_exception(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-def _write_llm_log(*, status: str, model: str, messages: List[dict], response: Any, error: Exception | None) -> None:
+def _write_llm_log(
+    *,
+    status: str,
+    model: str,
+    messages: list[dict],
+    response: Any,
+    error: Exception | None,
+) -> None:
     log_path = _get_llm_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -123,9 +129,8 @@ def _write_llm_log(*, status: str, model: str, messages: List[dict], response: A
 
     entry = "\n".join(lines) + "\n\n"
 
-    with _log_lock:
-        with log_path.open("a", encoding="utf-8") as f:
-            f.write(entry)
+    with _log_lock, log_path.open("a", encoding="utf-8") as f:
+        f.write(entry)
 
 
 @retry(
@@ -135,7 +140,7 @@ def _write_llm_log(*, status: str, model: str, messages: List[dict], response: A
     before_sleep=before_sleep_log,
 )
 def _call_llm_api(
-    messages: List[dict],
+    messages: list[dict],
     model: str,
     temperature: float = 1,
     **kwargs: Any,
@@ -152,10 +157,11 @@ def _call_llm_api(
 
     return response
 
+
 # TODO 记得改expire
 @memoize(get_llm_cache(), expire=360000, typed=True)
 def call_llm(
-    messages: List[dict],
+    messages: list[dict],
     model: str,
     temperature: float = 1,
     **kwargs: Any,
@@ -164,7 +170,9 @@ def call_llm(
     try:
         response = _call_llm_api(messages, model, temperature, **kwargs)
     except Exception as exc:
-        _write_llm_log(status="error", model=model, messages=messages, response=None, error=exc)
+        _write_llm_log(
+            status="error", model=model, messages=messages, response=None, error=exc
+        )
         raise
 
     if not (
@@ -176,8 +184,16 @@ def call_llm(
         and response.choices[0].message.content
     ):
         error = ValueError("Invalid OpenAI API response: empty choices or content")
-        _write_llm_log(status="error", model=model, messages=messages, response=response, error=error)
+        _write_llm_log(
+            status="error",
+            model=model,
+            messages=messages,
+            response=response,
+            error=error,
+        )
         raise error
 
-    _write_llm_log(status="success", model=model, messages=messages, response=response, error=None)
+    _write_llm_log(
+        status="success", model=model, messages=messages, response=response, error=None
+    )
     return response

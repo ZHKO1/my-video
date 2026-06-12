@@ -50,6 +50,7 @@ def get_llm_cache() -> Cache:
     """Get LLM translation cache instance."""
     return _llm_cache
 
+
 def get_translate_cache() -> Cache:
     """Get translate cache instance."""
     return _translate_cache
@@ -82,11 +83,13 @@ def memoize(cache_instance: Cache, **kwargs):
             if not _cache_enabled:
                 return func(*args, **kw)
 
-            cache_key = generate_cache_key({
-                "func": f"{func.__module__}.{func.__qualname__}",
-                "args": args,
-                "kwargs": tuple(sorted(kw.items())),
-            })
+            cache_key = generate_cache_key(
+                {
+                    "func": f"{func.__module__}.{func.__qualname__}",
+                    "args": args,
+                    "kwargs": tuple(sorted(kw.items())),
+                }
+            )
 
             result = cache_instance.get(cache_key, default=ENOVAL)
             if result is not ENOVAL:
