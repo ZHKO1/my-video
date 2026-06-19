@@ -24,7 +24,7 @@ from ..asr.asr_data import (
     ASRSentenceData,
     SentenceGroup,
 )
-from ..llm import call_llm
+from ..llm import call_llm, get_response_id
 from ..prompts import get_prompt
 from ..utils.helper import (
     comparison_bases_from_text,
@@ -90,7 +90,10 @@ class SubtitleOptimizer:
         subtitle_data: ASRSentenceData,
         reference_data: ASRData | None = None,
     ) -> ASRSentenceData:
-        """优化字幕句组。"""
+        """
+        优化字幕句组。
+        将优化结果写回输入对象，同时返回一个干净的副本（optimized_text 和 optimize_log 为空）
+        """
         try:
             sentence_groups = subtitle_data.sentences
             batches = self._batch_sentence_groups(sentence_groups, reference_data)
@@ -197,15 +200,13 @@ class SubtitleOptimizer:
         Returns:
             优化后的字幕批次
         """
-        start_idx = str(batch.groups[0].index)
-        end_idx = str(batch.groups[-1].index)
-        output.info(f"[+]Optimizing subtitles: {start_idx} - {end_idx}")
-
+        output.info(
+            f"[+]Optimizing subtitles: {batch.groups[0].index} - "
+            f"{batch.groups[-1].index}"
+        )
         try:
             result = self.agent_loop(batch.subtitle_chunk, batch.reference_text)
-
             return result
-
         except Exception as e:
             output.error(f"Optimization failed: {e!s}")
             return batch.subtitle_chunk
@@ -258,6 +259,7 @@ class SubtitleOptimizer:
                 model=self.model,
                 temperature=0.2,
             )
+            response_id = get_response_id(response)
 
             result_text = response.choices[0].message.content
             if not result_text:
@@ -283,7 +285,7 @@ class SubtitleOptimizer:
 
             # 验证失败，添加反馈
             output.warn(
-                f"优化验证失败，开始反馈循环 (第{step + 1}次尝试): {error_message}"
+                f"优化验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
             messages.append({"role": "assistant", "content": result_text})
             messages.append(

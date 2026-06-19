@@ -33,6 +33,7 @@ class WorkspacePaths:
     trans_srt: Path
     compare_txt: Path
     # punctuation_txt: Path
+    origin_txt: Path
     optimized_txt: Path
     summary_json: Path
     output_mp4: Path
@@ -58,6 +59,7 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         src_srt=subtitle_dir / "src.srt",
         trans_srt=subtitle_dir / "trans.srt",
         compare_txt=subtitle_dir / "compare.txt",
+        origin_txt=subtitle_dir / "origin.txt",
         optimized_txt=subtitle_dir / "optimized.txt",
         summary_json=subtitle_dir / "summary.json",
         output_mp4=base / "output.mp4",

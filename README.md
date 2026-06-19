@@ -427,3 +427,14 @@ uv run my-video synthesize ~/work/my-video/<VideoTitle>
   output.mp4                 -- 最终带字幕视频
   output.md                  -- 视频元信息
 ```
+
+
+
+
+
+# TODOLIST
+1. my_video/core/asr/asr_data.py
+全面测试一遍
+
+build_sentence_groups 根据不同的标点符号测试一圈
+根据srt以及vtt的测试

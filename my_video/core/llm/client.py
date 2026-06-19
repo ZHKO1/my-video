@@ -106,10 +106,46 @@ def _format_exception(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
+def get_response_id(response: Any) -> str:
+    response_id = getattr(response, "id", None)
+    if response_id:
+        return str(response_id)
+    if hasattr(response, "model_dump"):
+        try:
+            response_dict = response.model_dump()
+        except Exception:
+            response_dict = None
+        if isinstance(response_dict, dict) and response_dict.get("id"):
+            return str(response_dict["id"])
+    return "-"
+
+
+def _normalize_log_text(text: Any) -> str:
+    if text is None:
+        return ""
+    return str(text).replace("\\n", "\n")
+
+
+def _get_request_content(messages: list[dict]) -> str:
+    if not messages:
+        return ""
+    return _normalize_log_text(messages[-1].get("content", ""))
+
+
+def _get_response_contents(response: Any) -> list[str]:
+    if not response or not hasattr(response, "choices") or not response.choices:
+        return []
+
+    contents: list[str] = []
+    for choice in response.choices:
+        message = getattr(choice, "message", None)
+        contents.append(_normalize_log_text(getattr(message, "content", "")))
+    return contents
+
+
 def _write_llm_log(
     *,
     status: str,
-    model: str,
     messages: list[dict],
     response: Any,
     error: Exception | None,
@@ -118,14 +154,19 @@ def _write_llm_log(
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
-        f"timestamp={datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"status={status}",
-        f"model={model}",
-        f"messages={_serialize_log_value(messages)}",
-        f"response={_serialize_log_value(response)}",
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {get_response_id(response)} {status}",
+        "req:",
+        _get_request_content(messages),
+        "res:",
     ]
+    response_contents = _get_response_contents(response)
+    if not response_contents:
+        lines.append("")
+    else:
+        for index, content in enumerate(response_contents):
+            lines.extend([f"choice[{index}]:", content])
     if error is not None:
-        lines.append(f"error={_format_exception(error)}")
+        lines.extend(["error:", _format_exception(error)])
 
     entry = "\n".join(lines) + "\n\n"
 
@@ -171,7 +212,7 @@ def call_llm(
         response = _call_llm_api(messages, model, temperature, **kwargs)
     except Exception as exc:
         _write_llm_log(
-            status="error", model=model, messages=messages, response=None, error=exc
+            status="error", messages=messages, response=None, error=exc
         )
         raise
 
@@ -186,7 +227,6 @@ def call_llm(
         error = ValueError("Invalid OpenAI API response: empty choices or content")
         _write_llm_log(
             status="error",
-            model=model,
             messages=messages,
             response=response,
             error=error,
@@ -194,6 +234,6 @@ def call_llm(
         raise error
 
     _write_llm_log(
-        status="success", model=model, messages=messages, response=response, error=None
+        status="success", messages=messages, response=response, error=None
     )
     return response

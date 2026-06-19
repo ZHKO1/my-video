@@ -224,3 +224,50 @@ class TestSubtitleOptimizerFlow:
         )
         assert "0: " not in captured["user_prompt"]
         optimizer.stop()
+
+    def test_agent_loop_warns_with_response_id_on_validation_failure(
+        self, monkeypatch
+    ) -> None:
+        optimizer = SubtitleOptimizer(
+            thread_num=1,
+            batch_num=20,
+            model="test-model",
+            custom_prompt="",
+        )
+        warnings: list[str] = []
+
+        class DummyMessage:
+            content = '{"0":"changed too much"}'
+
+        class DummyChoice:
+            message = DummyMessage()
+
+        class DummyResponse:
+            id = "opt-resp-1"
+            choices = [DummyChoice()]
+
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            lambda **kwargs: DummyResponse(),
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.output.warn",
+            lambda message: warnings.append(message),
+        )
+        monkeypatch.setattr(
+            optimizer,
+            "_validate_optimization_result",
+            lambda **kwargs: (
+                len(warnings) > 0,
+                "too different" if not warnings else "",
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello world"}, "")
+
+        assert result == {"0": "changed too much"}
+        assert (
+            "优化验证失败[opt-resp-1]，开始反馈循环 (第1次尝试): too different"
+            in warnings
+        )
+        optimizer.stop()

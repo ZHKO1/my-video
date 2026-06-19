@@ -47,6 +47,7 @@ def run(args: Namespace, config: dict) -> int:
         max_word_count = max_cjk if is_cjk else max_english
 
         sentence_data = asr_data.to_sentence_data()
+        sentence_data.to_txt(paths.origin_txt)
 
         optimizer = SubtitleOptimizer(
             thread_num=thread_num,

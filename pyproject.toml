@@ -3,6 +3,7 @@ name = "my-video"
 version = "0.1.0"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    'audioop-lts; python_version >= "3.13"',
     "numpy>=2.2.6",
     "opencv-python>=4.10.0.84",
     "json-repair>=0.39.1",

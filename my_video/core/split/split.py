@@ -11,7 +11,7 @@ from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
 from my_video.core.asr.asr_data import ASRDataSeg, SentenceGroup, SubtitleLine
-from my_video.core.llm import call_llm
+from my_video.core.llm import call_llm, get_response_id
 from my_video.core.prompts import get_prompt
 from my_video.core.utils.text_utils import count_words, is_mainly_cjk
 
@@ -131,6 +131,7 @@ class SubtitleSplitter:
         last_result: dict[int, list[str]] | None = None
         for step in range(MAX_STEPS):
             response = call_llm(messages=messages, model=self.model, temperature=0.2)
+            response_id = get_response_id(response)
             result_text = response.choices[0].message.content
             if not result_text:
                 raise ValueError("LLM returned empty result")
@@ -152,7 +153,7 @@ class SubtitleSplitter:
                         return parsed_parts
 
             output.warn(
-                f"分割验证失败，开始反馈循环 (第{step + 1}次尝试): {error_message}"
+                f"分割验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
             messages.append({"role": "assistant", "content": result_text})
             messages.append(

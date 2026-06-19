@@ -4,25 +4,33 @@ import sys
 import threading
 
 
+_lock = threading.Lock()
+
+
 def info(msg: str) -> None:
-    print(f"  {msg}", file=sys.stderr)
+    with _lock:
+        print(f"  {msg}", file=sys.stderr)
 
 
 def success(msg: str) -> None:
-    print(f"\u2713 {msg}", file=sys.stderr)
+    with _lock:
+        print(f"\u2713 {msg}", file=sys.stderr)
 
 
 def error(msg: str) -> None:
-    print(f"\u2717 Error: {msg}", file=sys.stderr)
+    with _lock:
+        print(f"\u2717 Error: {msg}", file=sys.stderr)
 
 
 def warn(msg: str) -> None:
-    print(f"! Warning: {msg}", file=sys.stderr)
+    with _lock:
+        print(f"! Warning: {msg}", file=sys.stderr)
 
 
 def hint(msg: str) -> None:
     """Print a hint message (e.g. how to fix a config issue)."""
-    print(f"  {msg}", file=sys.stderr)
+    with _lock:
+        print(f"  {msg}", file=sys.stderr)
 
 
 class ProgressLine:
