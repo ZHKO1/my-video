@@ -1,6 +1,7 @@
 """CLI package."""
 
-from my_video.cli import exit_codes as EXIT
-from my_video.cli import output
+from my_video.cli import exit_codes, output
+
+EXIT = exit_codes
 
 __all__ = ["EXIT", "output"]

@@ -12,7 +12,7 @@ import json_repair
 from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
-from my_video.core.asr.text_diff import (
+from my_video.core.utils.text_diff import (
     render_inline_diff,
     rewrite_segments_with_timestamps,
 )
@@ -27,10 +27,8 @@ from ..asr.asr_data import (
 from ..llm import call_llm, get_response_id
 from ..prompts import get_prompt
 from ..utils.helper import (
-    comparison_bases_from_text,
-    comparison_bases_from_tokens,
-    split_token_parts,
     split_tokens,
+    text_bases,
 )
 
 MAX_STEPS = 3
@@ -309,7 +307,7 @@ class SubtitleOptimizer:
 
         检查:
         1. 键是否完全匹配
-        2. 改动是否过大（相似度 < 0.7）
+        2. 改动（去掉标点符号）是否过大（相似度 < 0.7）
 
         Args:
             original_chunk: 原始字幕批次
@@ -344,23 +342,13 @@ class SubtitleOptimizer:
             original_text = original_chunk[key]
             optimized_text = optimized_chunk[key]
 
-            original_bases = comparison_bases_from_text(original_text)
-            optimized_bases = comparison_bases_from_text(optimized_text)
+            original_bases = text_bases(original_text)
+            optimized_bases = text_bases(optimized_text)
             similarity = Levenshtein.normalized_similarity(
                 original_bases,
                 optimized_bases,
             )
             similarity_threshold = 0.3 if count_words(original_text) <= 10 else 0.6
-
-            # if similarity != 1.0:
-            #     punctuation_changes = self._count_punctuation_changes(
-            #         original_text,
-            #         optimized_text,
-            #     )
-            #     output.warn(
-            #         f"similarity{similarity} punct_changes={punctuation_changes}:\n"
-            #         f" origin: {original_text} \n optimized: {optimized_text} \n"
-            #     )
 
             # 相似度过低
             if similarity < similarity_threshold:
@@ -449,12 +437,7 @@ class SubtitleOptimizer:
 
     @classmethod
     def _build_group_change_log(cls, original_text: str, optimized_text: str) -> str:
-        log = render_inline_diff(
-            original_text,
-            optimized_text,
-            mode="strict",
-            display="candidate",
-        )
+        log = render_inline_diff(original_text, optimized_text)
         return "" if log == " ".join(split_tokens(optimized_text.strip())) else log
 
     @staticmethod
@@ -485,28 +468,6 @@ class SubtitleOptimizer:
             optimized_text=optimized_text,
             optimize_log=optimize_log,
         )
-
-    @classmethod
-    def _count_punctuation_changes(cls, original_text: str, optimized_text: str) -> int:
-        original_tokens = split_tokens(original_text)
-        optimized_tokens = split_tokens(optimized_text)
-        original_parts = [split_token_parts(token) for token in original_tokens]
-        optimized_parts = [split_token_parts(token) for token in optimized_tokens]
-        opcodes = Levenshtein.opcodes(
-            comparison_bases_from_tokens([part.original for part in original_parts]),
-            comparison_bases_from_tokens([part.original for part in optimized_parts]),
-        )
-        punctuation_changes = 0
-        for tag, i1, i2, j1, j2 in opcodes:
-            if tag != "equal":
-                continue
-            for old_index, new_index in zip(range(i1, i2), range(j1, j2), strict=True):
-                if (
-                    original_parts[old_index].original.lower()
-                    != optimized_parts[new_index].original.lower()
-                ):
-                    punctuation_changes += 1
-        return punctuation_changes
 
     def stop(self) -> None:
         """停止优化器并清理资源"""

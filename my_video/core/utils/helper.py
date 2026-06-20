@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 TOKEN_SPLIT_PATTERN = re.compile(r"\s+")
+WHITESPACE_PATTERN = re.compile(r"\s+")
 TRAILING_PUNCTUATION_PATTERN = re.compile(r"[^\w]+$")
 EDGE_PUNCTUATION_PATTERN = re.compile(r"^[^\w]+|[^\w]+$")
 
@@ -70,19 +71,20 @@ def split_tokens(text: str) -> list[str]:
     return [token for token in TOKEN_SPLIT_PATTERN.split(text.strip()) if token]
 
 
-def split_token_parts(token: str, allowed_punctuation: str | None = None) -> TokenParts:
-    stripped = token.strip()
-    if allowed_punctuation is None:
-        trailing_punctuation_match = TRAILING_PUNCTUATION_PATTERN.search(stripped)
-        trailing_punctuation = (
-            trailing_punctuation_match.group(0) if trailing_punctuation_match else ""
-        )
-    else:
-        suffix_start = len(stripped)
-        while suffix_start > 0 and stripped[suffix_start - 1] in allowed_punctuation:
-            suffix_start -= 1
-        trailing_punctuation = stripped[suffix_start:]
+def compact_whitespace(text: str) -> str:
+    return WHITESPACE_PATTERN.sub(" ", text).strip()
 
+
+def text_tokens(text: str) -> list[str]:
+    return split_tokens(compact_whitespace(text))
+
+
+def split_token_parts(token: str) -> TokenParts:
+    stripped = token.strip()
+    trailing_punctuation_match = TRAILING_PUNCTUATION_PATTERN.search(stripped)
+    trailing_punctuation = (
+        trailing_punctuation_match.group(0) if trailing_punctuation_match else ""
+    )
     base = (
         stripped[: len(stripped) - len(trailing_punctuation)]
         if trailing_punctuation
@@ -95,11 +97,12 @@ def split_token_parts(token: str, allowed_punctuation: str | None = None) -> Tok
     )
 
 
-def comparison_bases_from_text(text: str) -> list[str]:
-    return comparison_bases_from_tokens(split_tokens(text))
+# 去掉标点符号，全小写
+def text_bases(text: str) -> list[str]:
+    return token_bases(split_tokens(text))
 
 
-def comparison_bases_from_tokens(tokens: list[str]) -> list[str]:
+def token_bases(tokens: list[str]) -> list[str]:
     return [
         EDGE_PUNCTUATION_PATTERN.sub("", split_token_parts(token).base).lower()
         for token in tokens

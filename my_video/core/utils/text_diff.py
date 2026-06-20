@@ -1,27 +1,15 @@
 from __future__ import annotations
 
 import itertools
-import re
 from typing import Literal
 
 from rapidfuzz.distance import Levenshtein
 
 from my_video.core.asr.asr_data import SubtitleSegment
-from my_video.core.utils.helper import comparison_bases_from_tokens, split_tokens
+from my_video.core.utils.helper import text_tokens, token_bases
 
 DiffMode = Literal["strict", "relaxed"]
-DisplayMode = Literal["reference", "candidate"]
 Opcode = tuple[str, int, int, int, int]
-
-WHITESPACE_PATTERN = re.compile(r"\s+")
-
-
-def normalize_whitespace(text: str) -> str:
-    return WHITESPACE_PATTERN.sub(" ", text).strip()
-
-
-def tokenize_normalized_text(text: str) -> list[str]:
-    return split_tokens(normalize_whitespace(text))
 
 
 def build_token_opcodes(
@@ -34,8 +22,8 @@ def build_token_opcodes(
         return Levenshtein.opcodes(reference_tokens, candidate_tokens)
     if mode == "relaxed":
         return Levenshtein.opcodes(
-            comparison_bases_from_tokens(reference_tokens),
-            comparison_bases_from_tokens(candidate_tokens),
+            token_bases(reference_tokens),
+            token_bases(candidate_tokens),
         )
     raise ValueError(f"Unsupported diff mode: {mode}")
 
@@ -73,25 +61,17 @@ def merge_edit_opcodes(opcodes: list[Opcode]) -> list[Opcode]:
 def render_inline_diff(
     reference_text: str,
     candidate_text: str,
-    *,
-    mode: DiffMode = "strict",
-    display: DisplayMode = "reference",
 ) -> str:
-    reference_tokens = tokenize_normalized_text(reference_text)
-    candidate_tokens = tokenize_normalized_text(candidate_text)
+    reference_tokens = text_tokens(reference_text)
+    candidate_tokens = text_tokens(candidate_text)
     opcodes = merge_edit_opcodes(
-        build_token_opcodes(reference_tokens, candidate_tokens, mode=mode)
+        build_token_opcodes(reference_tokens, candidate_tokens, mode="strict")
     )
 
     rendered: list[str] = []
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
-            tokens = (
-                reference_tokens[i1:i2]
-                if display == "reference"
-                else candidate_tokens[j1:j2]
-            )
-            rendered.extend(tokens)
+            rendered.extend(candidate_tokens[j1:j2])
             continue
 
         rendered.extend(
@@ -112,7 +92,7 @@ def rewrite_segments_with_timestamps(
     anchor_mode: DiffMode = "relaxed",
 ) -> list[SubtitleSegment]:
     original_tokens = [segment.text.strip() for segment in original_segments]
-    target_tokens = tokenize_normalized_text(target_text)
+    target_tokens = text_tokens(target_text)
     segment_overrides: dict[int, tuple[int, int]] = {}
     opcodes = merge_edit_opcodes(
         build_token_opcodes(

@@ -9,7 +9,6 @@ from pathlib import Path
 
 from my_video.cli import EXIT, output
 from my_video.cli.config import get_toml_value
-from my_video.core.asr.text_diff import normalize_whitespace, render_inline_diff
 from my_video.core.subtitle_io import write_subtitle_lines_to_srt
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
@@ -112,19 +111,6 @@ def _load_origin_subtitle_data(paths):
     from my_video.core.asr.asr_data import SubtitleSegments
 
     return SubtitleSegments.from_subtitle_file(str(subtitle_path))
-
-
-def _write_stage_diff(
-    *, save_path: Path, original_text: str, updated_text: str
-) -> None:
-    diff_text = render_inline_diff(
-        normalize_whitespace(original_text),
-        normalize_whitespace(updated_text),
-        mode="strict",
-        display="reference",
-    )
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-    save_path.write_text(diff_text, encoding="utf-8")
 
 
 def _prompt_choice(
