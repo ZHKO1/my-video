@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 
 from my_video.core.asr.asr_data import (
-    ASRData,
-    ASRDataSeg,
-    ASRSentenceData,
-    SentenceGroup,
-    build_sentence_groups,
+    SubtitleSegment,
+    SubtitleSegments,
+    SubtitleSentence,
+    SubtitleSentences,
+    build_sentence_list,
 )
 
 
@@ -32,7 +32,7 @@ class TestFromWhisperxJson:
             encoding="utf-8",
         )
 
-        asr_data = ASRData.from_whisperx_json(str(whisperx_json))
+        asr_data = SubtitleSegments.from_whisperx_json(str(whisperx_json))
 
         assert len(asr_data.segments) == 2
         assert asr_data.segments[0].text == "Hello,"
@@ -49,7 +49,7 @@ class TestFromWhisperxJson:
             encoding="utf-8",
         )
 
-        asr_data = ASRData.from_whisperx_json(str(whisperx_json))
+        asr_data = SubtitleSegments.from_whisperx_json(str(whisperx_json))
 
         assert asr_data.segments == []
 
@@ -60,7 +60,7 @@ class TestFromWhisperxJson:
             encoding="utf-8",
         )
 
-        asr_data = ASRData.from_whisperx_json(str(whisperx_json))
+        asr_data = SubtitleSegments.from_whisperx_json(str(whisperx_json))
 
         assert asr_data.segments == []
 
@@ -79,7 +79,7 @@ class TestFromWhisperxJson:
             encoding="utf-8",
         )
 
-        asr_data = ASRData.from_whisperx_json(str(whisperx_json))
+        asr_data = SubtitleSegments.from_whisperx_json(str(whisperx_json))
 
         assert len(asr_data.segments) == 1
         assert asr_data.segments[0].text == "yes"
@@ -88,164 +88,66 @@ class TestFromWhisperxJson:
 
     def test_file_not_found(self) -> None:
         with pytest.raises(FileNotFoundError):
-            ASRData.from_whisperx_json("/nonexistent/path/whisperx.json")
+            SubtitleSegments.from_whisperx_json("/nonexistent/path/whisperx.json")
 
     def test_invalid_json(self, tmp_path: Path) -> None:
         whisperx_json = tmp_path / "whisperx.json"
         whisperx_json.write_text("not json", encoding="utf-8")
 
         with pytest.raises(json.JSONDecodeError):
-            ASRData.from_whisperx_json(str(whisperx_json))
+            SubtitleSegments.from_whisperx_json(str(whisperx_json))
 
 
-class TestSentenceGroupGaps:
-    def test_no_gap_exceeds_default_threshold(self) -> None:
-        group = SentenceGroup(
-            index=0,
-            segments=[
-                ASRDataSeg("a", 0, 100),
-                ASRDataSeg("b", 150, 220),
-                ASRDataSeg("c", 300, 380),
-            ],
-            text="a b c",
-        )
-
-        has_gap, gap_count = group.check_segment_gaps()
-
-        assert has_gap is False
-        assert gap_count == []
-
-    def test_counts_single_gap_over_default_threshold(self) -> None:
-        group = SentenceGroup(
-            index=0,
-            segments=[
-                ASRDataSeg("a", 0, 100),
-                ASRDataSeg("b", 2500, 2600),
-                ASRDataSeg("c", 2700, 2800),
-            ],
-            text="a b c",
-        )
-
-        has_gap, gap_count = group.check_segment_gaps()
-
-        assert has_gap is True
-        assert gap_count == [1]
-
-    def test_counts_multiple_gaps_with_custom_threshold(self) -> None:
-        group = SentenceGroup(
-            index=0,
-            segments=[
-                ASRDataSeg("a", 0, 100),
-                ASRDataSeg("b", 1200, 1300),
-                ASRDataSeg("c", 2700, 2800),
-                ASRDataSeg("d", 5000, 5100),
-            ],
-            text="a b c d",
-        )
-
-        has_gap, gap_count = group.check_segment_gaps(max_gap_ms=1000)
-
-        assert has_gap is True
-        assert gap_count == [1, 2, 3]
-
-    def test_formats_gap_markers_with_double_brackets(self) -> None:
-        group = SentenceGroup(
-            index=0,
-            segments=[
-                ASRDataSeg("hello", 0, 100),
-                ASRDataSeg("world", 2500, 2600),
-                ASRDataSeg("again", 2700, 2800),
-            ],
-            text="hello world again",
-        )
-
-        _, gap_positions = group.check_segment_gaps()
-
-        assert group.format_with_gap_markers(gap_positions) == "hello】【world again"
-
-
-class TestSentenceGroups:
-    def test_build_sentence_groups_defaults_fields(self) -> None:
+class TestBuildSentenceList:
+    def test_builds_sentences_by_sentence_end_punctuation(self) -> None:
         segments = [
-            ASRDataSeg("hello", 0, 100),
-            ASRDataSeg("world.", 100, 200),
+            SubtitleSegment("Hello", 0, 100),
+            SubtitleSegment("world,", 100, 200),
+            SubtitleSegment("again.", 200, 300),
+            SubtitleSegment("How", 300, 400),
+            SubtitleSegment("are", 400, 500),
+            SubtitleSegment("you?", 500, 600),
+            SubtitleSegment("Great", 600, 700),
+            SubtitleSegment("!", 700, 800),
+            SubtitleSegment("你好", 800, 900),
+            SubtitleSegment("世界，", 900, 1000),
+            SubtitleSegment("继续", 1000, 1100),
+            SubtitleSegment("测试。", 1100, 1200),
+            SubtitleSegment("真的吗？", 1200, 1300),
+            SubtitleSegment("当然！", 1300, 1400),
         ]
 
-        groups = build_sentence_groups(segments)
+        groups = build_sentence_list(segments)
 
-        assert len(groups) == 1
-        assert groups[0].optimized_text == ""
-        assert groups[0].optimize_log == ""
+        assert [group.text for group in groups] == [
+            "Hello world, again.",
+            "How are you?",
+            "Great !",
+            "你好 世界， 继续 测试。",
+            "真的吗？",
+            "当然！",
+        ]
+        assert [group.index for group in groups] == [0, 1, 2, 3, 4, 5]
+        assert all(group.optimized_text == "" for group in groups)
+        assert all(group.optimize_log == "" for group in groups)
 
 
-class TestAsrDataJson:
-    def test_to_json_and_from_json_round_trip(self, tmp_path: Path) -> None:
-        asr_data = ASRData(
-            [
-                ASRDataSeg("hello", 0, 100),
-                ASRDataSeg("world", 100, 200),
-            ]
-        )
-
-        json_path = tmp_path / "asr.json"
-        payload = asr_data.to_json(json_path)
-        restored = ASRData.from_json(payload)
-
-        assert (
-            json.loads(json_path.read_text(encoding="utf-8"))["segments"][0]["text"]
-            == "hello"
-        )
-        assert [seg.text for seg in restored.segments] == ["hello", "world"]
-
-    def test_to_sentence_data_round_trip(self, tmp_path: Path) -> None:
-        asr_data = ASRData(
-            [
-                ASRDataSeg("hello", 0, 100),
-                ASRDataSeg("world.", 100, 200),
-            ]
-        )
-
-        sentence_data = asr_data.to_sentence_data()
-        json_path = tmp_path / "sentence.json"
-        sentence_payload = sentence_data.to_json(json_path)
-        restored = ASRSentenceData.from_json(sentence_payload)
-
-        assert [group.text for group in sentence_data.sentences] == ["hello world."]
-        assert [group.text for group in restored.sentences] == ["hello world."]
-
-    def test_from_json_accepts_dict(self) -> None:
-        restored = ASRSentenceData.from_json(
-            {
-                "sentences": [
-                    {
-                        "index": 0,
-                        "text": "hello world",
-                        "segments": [
-                            {"text": "hello", "start_time": 0, "end_time": 100},
-                            {"text": "world", "start_time": 100, "end_time": 200},
-                        ],
-                    }
-                ]
-            }
-        )
-
-        assert restored.sentences[0].text == "hello world"
-
+class TestSubtitleSentencesToTxt:
     def test_to_txt_prefers_optimized_text_and_writes_logs(
         self, tmp_path: Path
     ) -> None:
-        sentence_data = ASRSentenceData(
+        sentence_data = SubtitleSentences(
             [
-                SentenceGroup(
+                SubtitleSentence(
                     index=0,
-                    segments=[ASRDataSeg("hello", 0, 100)],
+                    segments=[SubtitleSegment("hello", 0, 100)],
                     text="hello",
-                    optimized_text="HELLO",
-                    optimize_log="log one",
+                    optimized_text="hello world",
+                    optimize_log="hello 【∅/world】",
                 ),
-                SentenceGroup(
+                SubtitleSentence(
                     index=1,
-                    segments=[ASRDataSeg("world", 100, 200)],
+                    segments=[SubtitleSegment("world", 100, 200)],
                     text="world",
                 ),
             ]
@@ -254,5 +156,65 @@ class TestAsrDataJson:
         txt_path = tmp_path / "optimized.txt"
         content = sentence_data.to_txt(txt_path)
 
-        assert content == "0. log one\n1. world"
+        assert content == "0. hello 【∅/world】\n1. world"
         assert txt_path.read_text(encoding="utf-8") == content
+
+
+class TestSubtitleSegmentsTextIO:
+    def test_to_txt_writes_joined_text(self, tmp_path: Path) -> None:
+        subtitle_segments = SubtitleSegments(
+            [
+                SubtitleSegment("hello", 0, 100),
+                SubtitleSegment("world", 100, 200),
+            ]
+        )
+
+        txt_path = tmp_path / "subtitle.txt"
+        content = subtitle_segments.to_txt(txt_path)
+
+        assert content == "hello world"
+        assert txt_path.read_text(encoding="utf-8") == content
+
+    def test_from_srt_parses_single_line_text(self) -> None:
+        srt_content = """1
+00:00:01,000 --> 00:00:02,500
+hello world
+"""
+
+        subtitle_segments = SubtitleSegments.from_srt(srt_content)
+
+        assert len(subtitle_segments.segments) == 1
+        assert subtitle_segments.segments[0].text == "hello world"
+        assert subtitle_segments.segments[0].start_time == 1000
+        assert subtitle_segments.segments[0].end_time == 2500
+
+    def test_from_srt_parses_multi_line_text_as_single_segment(self) -> None:
+        srt_content = """1
+00:00:03,000 --> 00:00:05,000
+first line
+second line
+"""
+
+        subtitle_segments = SubtitleSegments.from_srt(srt_content)
+
+        assert len(subtitle_segments.segments) == 1
+        assert subtitle_segments.segments[0].text == "first line second line"
+        assert subtitle_segments.segments[0].start_time == 3000
+        assert subtitle_segments.segments[0].end_time == 5000
+
+    def test_from_srt_strips_trailing_h_markers(self) -> None:
+        srt_content = """4
+00:00:19,080 --> 00:00:23,280
+work testing all sorts of pieces of clothing\\h
+to see what they would look like "raw",\\h\\h
+"""
+
+        subtitle_segments = SubtitleSegments.from_srt(srt_content)
+
+        assert len(subtitle_segments.segments) == 1
+        assert (
+            subtitle_segments.segments[0].text
+            == 'work testing all sorts of pieces of clothing to see what they would look like "raw",'
+        )
+        assert subtitle_segments.segments[0].start_time == 19080
+        assert subtitle_segments.segments[0].end_time == 23280

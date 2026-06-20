@@ -26,14 +26,14 @@ def run(args: Namespace, config: dict) -> int:
         output.error(f"whisperx.json not found: {paths.whisperx_json!s}")
         return EXIT.FILE_NOT_FOUND
 
-    from my_video.core.asr.asr_data import ASRData
+    from my_video.core.asr.asr_data import SubtitleSegments
     from my_video.core.optimize.optimize import SubtitleOptimizer
     from my_video.core.split.split import SubtitleSplitter
     from my_video.core.translate.factory import TranslatorFactory
     from my_video.core.utils.text_utils import is_mainly_cjk
 
     try:
-        asr_data = ASRData.from_whisperx_json(str(paths.whisperx_json))
+        asr_data = SubtitleSegments.from_whisperx_json(str(paths.whisperx_json))
         reference_data = _load_origin_subtitle_data(paths)
 
         thread_num = get_toml_value(config, "subtitle.thread_num", 4)
@@ -60,6 +60,7 @@ def run(args: Namespace, config: dict) -> int:
             reference_data=reference_data,
         )
         sentence_data.to_txt(paths.optimized_txt)
+        # 优化的文本后可能有标点符号的改动，所以需要重新分句号
         sentence_data = new_sentence_data.to_asr_data().to_sentence_data()
 
         splitter = SubtitleSplitter(
@@ -108,9 +109,9 @@ def _load_origin_subtitle_data(paths):
     if not subtitle_path:
         return None
 
-    from my_video.core.asr.asr_data import ASRData
+    from my_video.core.asr.asr_data import SubtitleSegments
 
-    return ASRData.from_subtitle_file(str(subtitle_path))
+    return SubtitleSegments.from_subtitle_file(str(subtitle_path))
 
 
 def _write_stage_diff(

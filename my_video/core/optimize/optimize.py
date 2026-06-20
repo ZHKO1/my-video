@@ -19,10 +19,10 @@ from my_video.core.asr.text_diff import (
 from my_video.core.utils.text_utils import count_words
 
 from ..asr.asr_data import (
-    ASRData,
-    ASRDataSeg,
-    ASRSentenceData,
-    SentenceGroup,
+    SubtitleSegment,
+    SubtitleSegments,
+    SubtitleSentence,
+    SubtitleSentences,
 )
 from ..llm import call_llm, get_response_id
 from ..prompts import get_prompt
@@ -39,7 +39,7 @@ REFERENCE_TIME_PADDING_MS = 5000
 
 @dataclass
 class OptimizationBatch:
-    groups: list[SentenceGroup]
+    groups: list[SubtitleSentence]
     subtitle_chunk: dict[str, str]
     reference_text: str
     start_time_ms: int
@@ -87,9 +87,9 @@ class SubtitleOptimizer:
 
     def optimize_subtitle(
         self,
-        subtitle_data: ASRSentenceData,
-        reference_data: ASRData | None = None,
-    ) -> ASRSentenceData:
+        subtitle_data: SubtitleSentences,
+        reference_data: SubtitleSegments | None = None,
+    ) -> SubtitleSentences:
         """
         优化字幕句组。
         将优化结果写回输入对象，同时返回一个干净的副本（optimized_text 和 optimize_log 为空）
@@ -109,8 +109,8 @@ class SubtitleOptimizer:
 
     def _batch_sentence_groups(
         self,
-        groups: list[SentenceGroup],
-        reference_data: ASRData | None = None,
+        groups: list[SubtitleSentence],
+        reference_data: SubtitleSegments | None = None,
     ) -> list[OptimizationBatch]:
         batches: list[OptimizationBatch] = []
         for index in range(0, len(groups), self.batch_num):
@@ -138,7 +138,7 @@ class SubtitleOptimizer:
     @classmethod
     def _build_reference_text(
         cls,
-        reference_data: ASRData | None,
+        reference_data: SubtitleSegments | None,
         *,
         start_time_ms: int,
         end_time_ms: int,
@@ -384,10 +384,10 @@ class SubtitleOptimizer:
     @classmethod
     def _write_back_groups(
         cls,
-        sentence_groups: list[SentenceGroup],
+        sentence_groups: list[SubtitleSentence],
         optimized_dict: dict[str, str],
-    ) -> ASRSentenceData:
-        new_groups: list[SentenceGroup] = []
+    ) -> SubtitleSentences:
+        new_groups: list[SubtitleSentence] = []
         for group in sentence_groups:
             optimized_text = optimized_dict.get(str(group.index))
             if optimized_text is None or not optimized_text.strip():
@@ -433,14 +433,14 @@ class SubtitleOptimizer:
                     segments=rewritten_segments,
                 )
             )
-        return ASRSentenceData(new_groups)
+        return SubtitleSentences(new_groups)
 
     @classmethod
     def _rewrite_group_segments(
         cls,
-        original_segments: list[ASRDataSeg],
+        original_segments: list[SubtitleSegment],
         optimized_text: str,
-    ) -> list[ASRDataSeg]:
+    ) -> list[SubtitleSegment]:
         return rewrite_segments_with_timestamps(
             original_segments,
             optimized_text,
@@ -458,9 +458,9 @@ class SubtitleOptimizer:
         return "" if log == " ".join(split_tokens(optimized_text.strip())) else log
 
     @staticmethod
-    def _copy_segments(segments: list[ASRDataSeg]) -> list[ASRDataSeg]:
+    def _copy_segments(segments: list[SubtitleSegment]) -> list[SubtitleSegment]:
         return [
-            ASRDataSeg(
+            SubtitleSegment(
                 text=segment.text,
                 start_time=segment.start_time,
                 end_time=segment.end_time,
@@ -471,14 +471,14 @@ class SubtitleOptimizer:
     @classmethod
     def _clone_sentence_group(
         cls,
-        group: SentenceGroup,
+        group: SubtitleSentence,
         *,
         text: str,
         optimized_text: str,
         optimize_log: str,
-        segments: list[ASRDataSeg],
-    ) -> SentenceGroup:
-        return SentenceGroup(
+        segments: list[SubtitleSegment],
+    ) -> SubtitleSentence:
+        return SubtitleSentence(
             index=group.index,
             segments=segments,
             text=text,

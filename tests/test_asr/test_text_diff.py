@@ -1,4 +1,4 @@
-from my_video.core.asr.asr_data import ASRDataSeg
+from my_video.core.asr.asr_data import SubtitleSegment
 from my_video.core.asr.text_diff import (
     normalize_whitespace,
     render_inline_diff,
@@ -6,8 +6,8 @@ from my_video.core.asr.text_diff import (
 )
 
 
-def make_seg(text: str, start: int, end: int) -> ASRDataSeg:
-    return ASRDataSeg(text=text, start_time=start, end_time=end)
+def make_seg(text: str, start: int, end: int) -> SubtitleSegment:
+    return SubtitleSegment(text=text, start_time=start, end_time=end)
 
 
 def test_strict_diff_detects_case_changes() -> None:

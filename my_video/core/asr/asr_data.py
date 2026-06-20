@@ -1,81 +1,37 @@
 import json
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
-from my_video.core.utils.helper import read_json_source, write_json_source
-from my_video.core.utils.text_utils import count_words
 
 SENTENCE_END_PATTERN = re.compile(r"[?!.？！。]+$")
+SRT_TRAILING_H_PATTERN = re.compile(r"(?:\\h)+$")
+
+
+class SubtitleSegment:
+    def __init__(self, text: str, start_time: int, end_time: int):
+        self.text = text
+        self.start_time = start_time
+        self.end_time = end_time
 
 
 @dataclass
-class SentenceGroup:
+class SubtitleSentence:
     index: int
-    segments: list["ASRDataSeg"]
+    segments: list["SubtitleSegment"]
     text: str
     optimized_text: str = ""
     optimize_log: str = ""
 
-    def check_segment_gaps(self, max_gap_ms: int = 2000) -> tuple[bool, list[int]]:
-        gap_positions: list[int] = []
-        for position, (previous_seg, current_seg) in enumerate(
-            zip(self.segments, self.segments[1:], strict=False),
-            start=1,
-        ):
-            if current_seg.start_time - previous_seg.end_time > max_gap_ms:
-                gap_positions.append(position)
-        return bool(gap_positions), gap_positions
 
-    def format_with_gap_markers(self, gap_positions: list[int]) -> str:
-        if not self.segments:
-            return ""
-
-        gap_position_set = set(gap_positions)
-        parts: list[str] = []
-        for position, seg in enumerate(self.segments, start=1):
-            parts.append(seg.text.strip())
-            if position < len(self.segments):
-                parts.append("】【" if position in gap_position_set else " ")
-        return "".join(parts)
-
-
-def batch_items_by_word_count[T](
-    items: list[T],
-    get_text: Callable[[T], str],
-    threshold: int,
-) -> list[list[T]]:
-    batches: list[list[T]] = []
-    current_batch: list[T] = []
-    current_count = 0
-
-    for item in items:
-        count = count_words(get_text(item))
-        if current_batch and current_count + count > threshold:
-            batches.append(current_batch)
-            current_batch = []
-            current_count = 0
-
-        current_batch.append(item)
-        current_count += count
-
-    if current_batch:
-        batches.append(current_batch)
-
-    return batches
-
-
-def build_sentence_groups(segments: list["ASRDataSeg"]) -> list[SentenceGroup]:
-    groups: list[SentenceGroup] = []
-    current_group: list[ASRDataSeg] = []
+def build_sentence_list(segments: list["SubtitleSegment"]) -> list[SubtitleSentence]:
+    groups: list[SubtitleSentence] = []
+    current_group: list[SubtitleSegment] = []
 
     for seg in segments:
         current_group.append(seg)
         if SENTENCE_END_PATTERN.search(seg.text.strip()):
             groups.append(
-                SentenceGroup(
+                SubtitleSentence(
                     index=len(groups),
                     segments=current_group,
                     text=" ".join(segment.text.strip() for segment in current_group),
@@ -85,7 +41,7 @@ def build_sentence_groups(segments: list["ASRDataSeg"]) -> list[SentenceGroup]:
 
     if current_group:
         groups.append(
-            SentenceGroup(
+            SubtitleSentence(
                 index=len(groups),
                 segments=current_group,
                 text=" ".join(segment.text.strip() for segment in current_group),
@@ -93,46 +49,6 @@ def build_sentence_groups(segments: list["ASRDataSeg"]) -> list[SentenceGroup]:
         )
 
     return groups
-
-
-def batch_sentence_groups(
-    groups: list[SentenceGroup],
-    threshold: int = 500,
-) -> list[list[SentenceGroup]]:
-    return batch_items_by_word_count(
-        groups,
-        get_text=lambda group: group.text,
-        threshold=threshold,
-    )
-
-
-def is_long_sentence_group(group: SentenceGroup, max_sentence_word_count: int) -> bool:
-    return count_words(group.text) > max_sentence_word_count
-
-
-class ASRDataSeg:
-    def __init__(self, text: str, start_time: int, end_time: int):
-        self.text = text
-        self.start_time = start_time
-        self.end_time = end_time
-
-    def __str__(self) -> str:
-        return f"ASRDataSeg({self.text}, {self.start_time}, {self.end_time})"
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "text": self.text,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ASRDataSeg":
-        return cls(
-            text=str(data["text"]),
-            start_time=int(data["start_time"]),
-            end_time=int(data["end_time"]),
-        )
 
 
 @dataclass
@@ -148,104 +64,12 @@ class SubtitleLine:
     def line_id(self) -> str:
         return f"{self.group_index}:{self.line_index}"
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "group_index": self.group_index,
-            "line_index": self.line_index,
-            "text": self.text,
-            "translate_text": self.translate_text,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
-        }
 
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SubtitleLine":
-        return cls(
-            group_index=int(data["group_index"]),
-            line_index=int(data["line_index"]),
-            text=str(data["text"]),
-            translate_text=str(data.get("translate_text", "")),
-            start_time=int(data["start_time"]),
-            end_time=int(data["end_time"]),
-        )
-
-
-class ASRSentenceData:
-    def __init__(self, sentences: list[SentenceGroup]):
-        self.sentences = list(sentences)
-
-    def to_txt(self, save_path: str | Path | None = None) -> str:
-        lines: list[str] = []
-        for sentence in self.sentences:
-            lines.append(
-                f"{sentence.index}. {sentence.optimize_log or sentence.optimized_text or sentence.text}"
-            )
-
-        text = "\n".join(lines)
-        if save_path is not None:
-            path = Path(save_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-        return text
-
-    def to_json(self, save_path: str | Path | None = None) -> str:
-        payload = {
-            "sentences": [
-                {
-                    "index": sentence.index,
-                    "text": sentence.text,
-                    "optimized_text": sentence.optimized_text,
-                    "optimize_log": sentence.optimize_log,
-                    "segments": [segment.to_dict() for segment in sentence.segments],
-                }
-                for sentence in self.sentences
-            ]
-        }
-        return write_json_source(payload, save_path)
-
-    @classmethod
-    def from_json(cls, source: str | Path | dict[str, Any]) -> "ASRSentenceData":
-        payload = read_json_source(source)
-        sentences = [
-            SentenceGroup(
-                index=int(sentence["index"]),
-                text=str(sentence["text"]),
-                optimized_text=str(sentence.get("optimized_text", "")),
-                optimize_log=str(sentence.get("optimize_log", "")),
-                segments=[
-                    ASRDataSeg.from_dict(segment)
-                    for segment in sentence.get("segments", [])
-                ],
-            )
-            for sentence in payload.get("sentences", [])
-        ]
-        return cls(sentences)
-
-    def to_asr_data(self) -> "ASRData":
-        segments: list[ASRDataSeg] = []
-        for sentence in self.sentences:
-            segments.extend(
-                ASRDataSeg(
-                    text=segment.text,
-                    start_time=segment.start_time,
-                    end_time=segment.end_time,
-                )
-                for segment in sentence.segments
-            )
-        return ASRData(segments)
-
-
-class ASRData:
-    def __init__(self, segments: list[ASRDataSeg]):
+class SubtitleSegments:
+    def __init__(self, segments: list[SubtitleSegment]):
         filtered_segments = [seg for seg in segments if seg.text and seg.text.strip()]
         filtered_segments.sort(key=lambda x: x.start_time)
         self.segments = filtered_segments
-
-    def to_json(self, save_path: str | Path | None = None) -> str:
-        payload = {
-            "segments": [segment.to_dict() for segment in self.segments],
-        }
-        return write_json_source(payload, save_path)
 
     def to_txt(
         self,
@@ -262,18 +86,11 @@ class ASRData:
                 f.write(text)
         return text
 
-    @classmethod
-    def from_json(cls, source: str | Path | dict[str, Any]) -> "ASRData":
-        payload = read_json_source(source)
-        return cls(
-            [ASRDataSeg.from_dict(segment) for segment in payload.get("segments", [])]
-        )
-
-    def to_sentence_data(self) -> ASRSentenceData:
-        return ASRSentenceData(build_sentence_groups(self.segments))
+    def to_sentence_data(self) -> "SubtitleSentences":
+        return SubtitleSentences(build_sentence_list(self.segments))
 
     @staticmethod
-    def from_whisperx_json(file_path: str) -> "ASRData":
+    def from_whisperx_json(file_path: str) -> "SubtitleSegments":
         file_path_obj = Path(file_path)
         if not file_path_obj.exists():
             raise FileNotFoundError(f"File not found: {file_path_obj}")
@@ -296,7 +113,7 @@ class ASRData:
             if start is None or end is None:
                 continue
             segments.append(
-                ASRDataSeg(
+                SubtitleSegment(
                     text=word,
                     start_time=int(start * 1000),
                     end_time=int(end * 1000),
@@ -313,17 +130,17 @@ class ASRData:
             #         f"Invalid word segment(pure punctuation) at {seg.start_time}ms-{seg.end_time}ms: '{seg.text}'"
             #     )
 
-        return ASRData(segments)
+        return SubtitleSegments(segments)
 
     @staticmethod
-    def from_subtitle_file(file_path: str) -> "ASRData":
-        """Load ASRData from subtitle file.
+    def from_subtitle_file(file_path: str) -> "SubtitleSegments":
+        """Load SubtitleSegments from subtitle file.
 
         Args:
             file_path: Subtitle file path (supports .srt, .vtt, .ass, .json)
 
         Returns:
-            Parsed ASRData instance
+            Parsed SubtitleSegments instance
 
         Raises:
             FileNotFoundError: File does not exist
@@ -341,17 +158,18 @@ class ASRData:
         suffix = file_path_obj.suffix.lower()
 
         if suffix == ".srt":
-            return ASRData.from_srt(content)
-        elif suffix == ".vtt":
-            if "<c>" in content:
-                return ASRData.from_youtube_vtt(content)
-            return ASRData.from_vtt(content)
+            return SubtitleSegments.from_srt(content)
+        # 需要实际例子参考
+        # elif suffix == ".vtt":
+        #     if "<c>" in content:
+        #         return SubtitleSegments.from_youtube_vtt(content)
+        #     return SubtitleSegments.from_vtt(content)
         else:
             raise ValueError(f"Unsupported file format: {suffix}")
 
     @staticmethod
-    def from_srt(srt_str: str) -> "ASRData":
-        """Create ASRData from SRT format string.
+    def from_srt(srt_str: str) -> "SubtitleSegments":
+        """Create SubtitleSegments from SRT format string.
 
         Uses language detection to distinguish between bilingual subtitles
         (original + translation) and multiline single-language subtitles.
@@ -360,7 +178,7 @@ class ASRData:
             srt_str: SRT format subtitle string
 
         Returns:
-            Parsed ASRData instance
+            Parsed SubtitleSegments instance
         """
         segments = []
         srt_time_pattern = re.compile(
@@ -396,24 +214,28 @@ class ASRData:
                 ]
             )
 
-            text_lines = lines[2:]
+            text_lines = [
+                SRT_TRAILING_H_PATTERN.sub("", text_line).strip()
+                for text_line in lines[2:]
+            ]
             if len(text_lines) == 1:
-                segments.append(ASRDataSeg(text_lines[0], start_time, end_time))
+                segments.append(SubtitleSegment(text_lines[0], start_time, end_time))
             else:
-                # Multi-line subtitle: preserve line breaks with \n
-                segments.append(ASRDataSeg(" ".join(text_lines), start_time, end_time))
+                segments.append(
+                    SubtitleSegment(" ".join(text_lines), start_time, end_time)
+                )
 
-        return ASRData(segments)
+        return SubtitleSegments(segments)
 
     @staticmethod
-    def from_vtt(vtt_str: str) -> "ASRData":
-        """Create ASRData from VTT format string.
+    def from_vtt(vtt_str: str) -> "SubtitleSegments":
+        """Create SubtitleSegments from VTT format string.
 
         Args:
             vtt_str: VTT format subtitle string
 
         Returns:
-            ASRData instance
+            SubtitleSegments instance
         """
         segments = []
         # Split by blank lines, skip the WEBVTT header block
@@ -481,19 +303,19 @@ class ASRData:
             cleaned_text = cleaned_text.strip()
 
             if cleaned_text and cleaned_text != " ":
-                segments.append(ASRDataSeg(cleaned_text, start_time, end_time))
+                segments.append(SubtitleSegment(cleaned_text, start_time, end_time))
 
-        return ASRData(segments)
+        return SubtitleSegments(segments)
 
     @staticmethod
-    def from_youtube_vtt(vtt_str: str) -> "ASRData":
-        """Create ASRData from YouTube VTT format with word-level timestamps.
+    def from_youtube_vtt(vtt_str: str) -> "SubtitleSegments":
+        """Create SubtitleSegments from YouTube VTT format with word-level timestamps.
 
         Args:
             vtt_str: YouTube VTT format subtitle string (contains <c> tags)
 
         Returns:
-            Parsed ASRData with word-level segments
+            Parsed SubtitleSegments with word-level segments
         """
 
         def parse_timestamp(ts: str) -> int:
@@ -501,7 +323,7 @@ class ASRData:
             h, m, s = ts.split(":")
             return int(float(h) * 3600000 + float(m) * 60000 + float(s) * 1000)
 
-        def split_timestamped_text(text: str) -> list[ASRDataSeg]:
+        def split_timestamped_text(text: str) -> list[SubtitleSegment]:
             """Extract word segments from timestamped text"""
             pattern = re.compile(r"<(\d{2}:\d{2}:\d{2}\.\d{3})>([^<]*)")
             matches = list(pattern.finditer(text))
@@ -516,7 +338,7 @@ class ASRData:
                 word = current_match.group(2).strip()
 
                 if word:
-                    word_segments.append(ASRDataSeg(word, start_time, end_time))
+                    word_segments.append(SubtitleSegment(word, start_time, end_time))
 
             return word_segments
 
@@ -551,4 +373,36 @@ class ASRData:
                 word_segments = split_timestamped_text(text)
                 segments.extend(word_segments)
 
-        return ASRData(segments)
+        return SubtitleSegments(segments)
+
+
+class SubtitleSentences:
+    def __init__(self, sentences: list[SubtitleSentence]):
+        self.sentences = list(sentences)
+
+    def to_txt(self, save_path: str | Path | None = None) -> str:
+        lines: list[str] = []
+        for sentence in self.sentences:
+            lines.append(
+                f"{sentence.index}. {sentence.optimize_log or sentence.optimized_text or sentence.text}"
+            )
+
+        text = "\n".join(lines)
+        if save_path is not None:
+            path = Path(save_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        return text
+
+    def to_asr_data(self) -> "SubtitleSegments":
+        segments: list[SubtitleSegment] = []
+        for sentence in self.sentences:
+            segments.extend(
+                SubtitleSegment(
+                    text=segment.text,
+                    start_time=segment.start_time,
+                    end_time=segment.end_time,
+                )
+                for segment in sentence.segments
+            )
+        return SubtitleSegments(segments)

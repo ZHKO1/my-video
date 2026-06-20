@@ -6,7 +6,7 @@ from typing import Literal
 
 from rapidfuzz.distance import Levenshtein
 
-from my_video.core.asr.asr_data import ASRDataSeg
+from my_video.core.asr.asr_data import SubtitleSegment
 from my_video.core.utils.helper import comparison_bases_from_tokens, split_tokens
 
 DiffMode = Literal["strict", "relaxed"]
@@ -105,12 +105,12 @@ def render_inline_diff(
 
 
 def rewrite_segments_with_timestamps(
-    original_segments: list[ASRDataSeg],
+    original_segments: list[SubtitleSegment],
     target_text: str,
     *,
     mode: DiffMode = "strict",
     anchor_mode: DiffMode = "relaxed",
-) -> list[ASRDataSeg]:
+) -> list[SubtitleSegment]:
     original_tokens = [segment.text.strip() for segment in original_segments]
     target_tokens = tokenize_normalized_text(target_text)
     segment_overrides: dict[int, tuple[int, int]] = {}
@@ -122,7 +122,7 @@ def rewrite_segments_with_timestamps(
         )
     )
 
-    rewritten_segments: list[ASRDataSeg] = []
+    rewritten_segments: list[SubtitleSegment] = []
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
             for old_index, new_index in zip(range(i1, i2), range(j1, j2), strict=True):
@@ -134,7 +134,7 @@ def rewrite_segments_with_timestamps(
                     ),
                 )
                 rewritten_segments.append(
-                    ASRDataSeg(
+                    SubtitleSegment(
                         text=target_tokens[new_index],
                         start_time=start_time,
                         end_time=end_time,
@@ -174,13 +174,13 @@ def rewrite_segments_with_timestamps(
 
 def _build_insert_segments(
     *,
-    original_segments: list[ASRDataSeg],
+    original_segments: list[SubtitleSegment],
     target_tokens: list[str],
     insert_at: int,
     token_start: int,
     token_end: int,
     segment_overrides: dict[int, tuple[int, int]],
-) -> list[ASRDataSeg]:
+) -> list[SubtitleSegment]:
     insert_count = token_end - token_start
     if insert_count <= 0:
         return []
@@ -210,7 +210,7 @@ def _build_insert_segments(
         time_ranges = [(0, 0)] * insert_count
 
     return [
-        ASRDataSeg(
+        SubtitleSegment(
             text=target_tokens[token_index],
             start_time=start_time,
             end_time=end_time,
@@ -223,13 +223,13 @@ def _build_insert_segments(
 
 def _build_replace_segments(
     *,
-    original_segments: list[ASRDataSeg],
+    original_segments: list[SubtitleSegment],
     target_tokens: list[str],
     original_start: int,
     original_end: int,
     token_start: int,
     token_end: int,
-) -> list[ASRDataSeg]:
+) -> list[SubtitleSegment]:
     old_count = original_end - original_start
     new_count = token_end - token_start
 
@@ -263,7 +263,7 @@ def _build_replace_segments(
         new_count,
     )
     return [
-        ASRDataSeg(
+        SubtitleSegment(
             text=target_tokens[token_index],
             start_time=start_time,
             end_time=end_time,
@@ -274,8 +274,8 @@ def _build_replace_segments(
     ]
 
 
-def _copy_segment_with_text(segment: ASRDataSeg, text: str) -> ASRDataSeg:
-    return ASRDataSeg(
+def _copy_segment_with_text(segment: SubtitleSegment, text: str) -> SubtitleSegment:
+    return SubtitleSegment(
         text=text,
         start_time=segment.start_time,
         end_time=segment.end_time,

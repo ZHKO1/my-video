@@ -1,14 +1,14 @@
 from my_video.core.asr.asr_data import (
-    ASRData,
-    ASRDataSeg,
-    ASRSentenceData,
-    SentenceGroup,
+    SubtitleSegment,
+    SubtitleSegments,
+    SubtitleSentence,
+    SubtitleSentences,
 )
 from my_video.core.optimize.optimize import SubtitleOptimizer
 
 
-def make_seg(text: str, start: int, end: int) -> ASRDataSeg:
-    return ASRDataSeg(text=text, start_time=start, end_time=end)
+def make_seg(text: str, start: int, end: int) -> SubtitleSegment:
+    return SubtitleSegment(text=text, start_time=start, end_time=end)
 
 
 class TestSubtitleOptimizerWriteBack:
@@ -46,7 +46,7 @@ class TestSubtitleOptimizerWriteBack:
 
     def test_optimize_log_uses_inline_diff_with_candidate_display(self) -> None:
         groups = [
-            SentenceGroup(
+            SubtitleSentence(
                 index=0,
                 segments=[
                     make_seg("alpha", 0, 100),
@@ -86,14 +86,14 @@ class TestSubtitleOptimizerFlow:
             model="test-model",
             custom_prompt="",
         )
-        sentence_data = ASRSentenceData(
+        sentence_data = SubtitleSentences(
             [
-                SentenceGroup(
+                SubtitleSentence(
                     index=0,
                     segments=[make_seg("hello", 0, 100), make_seg("world.", 160, 220)],
                     text="hello world.",
                 ),
-                SentenceGroup(
+                SubtitleSentence(
                     index=1,
                     segments=[make_seg("good", 220, 300), make_seg("day", 300, 420)],
                     text="good day",
@@ -128,14 +128,14 @@ class TestSubtitleOptimizerFlow:
             model="test-model",
             custom_prompt="",
         )
-        sentence_data = ASRSentenceData(
+        sentence_data = SubtitleSentences(
             [
-                SentenceGroup(
+                SubtitleSentence(
                     index=0,
                     segments=[make_seg("hello", 0, 100), make_seg("world.", 100, 200)],
                     text="hello world.",
                 ),
-                SentenceGroup(
+                SubtitleSentence(
                     index=1,
                     segments=[
                         make_seg("next", 8000, 8100),
@@ -145,7 +145,7 @@ class TestSubtitleOptimizerFlow:
                 ),
             ]
         )
-        reference_data = ASRData(
+        reference_data = SubtitleSegments(
             [
                 make_seg("before overlap", 0, 50),
                 make_seg("first match", 3000, 4000),
@@ -174,13 +174,13 @@ class TestSubtitleOptimizerFlow:
             custom_prompt="",
         )
         groups = [
-            SentenceGroup(
+            SubtitleSentence(
                 index=0,
                 segments=[make_seg("hello", 10000, 10100)],
                 text="hello",
             )
         ]
-        reference_data = ASRData([make_seg("far away", 0, 1000)])
+        reference_data = SubtitleSegments([make_seg("far away", 0, 1000)])
 
         batches = optimizer._batch_sentence_groups(groups, reference_data)
 

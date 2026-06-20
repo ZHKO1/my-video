@@ -10,7 +10,7 @@ import json_repair
 from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
-from my_video.core.asr.asr_data import ASRDataSeg, SentenceGroup, SubtitleLine
+from my_video.core.asr.asr_data import SubtitleLine, SubtitleSegment, SubtitleSentence
 from my_video.core.llm import call_llm, get_response_id
 from my_video.core.prompts import get_prompt
 from my_video.core.utils.text_utils import count_words, is_mainly_cjk
@@ -50,7 +50,7 @@ class SubtitleSplitter:
         atexit.register(self.stop)
 
     def split_subtitle(
-        self, sentence_groups: list[SentenceGroup]
+        self, sentence_groups: list[SubtitleSentence]
     ) -> list[SubtitleLine]:
         requests = [
             SplitRequest(group_index=group.index, text=group.text)
@@ -246,7 +246,7 @@ class SubtitleSplitter:
         return True, ""
 
     def _build_subtitle_lines(
-        self, group: SentenceGroup, parts: list[str]
+        self, group: SubtitleSentence, parts: list[str]
     ) -> list[SubtitleLine]:
         try:
             segment_ranges = self._match_parts_to_segments(group.segments, parts)
@@ -275,7 +275,7 @@ class SubtitleSplitter:
 
     def _match_parts_to_segments(
         self,
-        segments: list[ASRDataSeg],
+        segments: list[SubtitleSegment],
         parts: list[str],
     ) -> list[tuple[int, int]]:
         if not segments:
@@ -325,7 +325,9 @@ class SubtitleSplitter:
             raise ValueError("segment alignment overflow")
         return matches
 
-    def _segments_to_text(self, segments: list[ASRDataSeg], reference_text: str) -> str:
+    def _segments_to_text(
+        self, segments: list[SubtitleSegment], reference_text: str
+    ) -> str:
         texts = [segment.text.strip() for segment in segments if segment.text.strip()]
         if self._is_cjk_text(reference_text):
             return "".join(texts)
