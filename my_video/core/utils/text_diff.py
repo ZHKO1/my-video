@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import itertools
+from difflib import SequenceMatcher
 from typing import Literal
-
-from rapidfuzz.distance import Levenshtein
 
 from my_video.core.asr.asr_data import SubtitleSegment
 from my_video.core.utils.helper import text_tokens, token_bases
@@ -18,13 +17,16 @@ def build_token_opcodes(
     *,
     mode: DiffMode = "strict",
 ) -> list[Opcode]:
+    matcher: SequenceMatcher[str]
     if mode == "strict":
-        return Levenshtein.opcodes(reference_tokens, candidate_tokens)
+        matcher = SequenceMatcher(a=reference_tokens, b=candidate_tokens)
+        return matcher.get_opcodes()
     if mode == "relaxed":
-        return Levenshtein.opcodes(
-            token_bases(reference_tokens),
-            token_bases(candidate_tokens),
+        matcher = SequenceMatcher(
+            a=token_bases(reference_tokens),
+            b=token_bases(candidate_tokens),
         )
+        return matcher.get_opcodes()
     raise ValueError(f"Unsupported diff mode: {mode}")
 
 
@@ -84,40 +86,25 @@ def render_inline_diff(
     return " ".join(rendered)
 
 
-def rewrite_segments_with_timestamps(
+def rewrite_sentence_segments_with_timestamps(
     original_segments: list[SubtitleSegment],
     target_text: str,
-    *,
-    mode: DiffMode = "strict",
-    anchor_mode: DiffMode = "relaxed",
 ) -> list[SubtitleSegment]:
     original_tokens = [segment.text.strip() for segment in original_segments]
     target_tokens = text_tokens(target_text)
-    segment_overrides: dict[int, tuple[int, int]] = {}
     opcodes = merge_edit_opcodes(
-        build_token_opcodes(
-            original_tokens,
-            target_tokens,
-            mode=anchor_mode or mode,
-        )
+        build_token_opcodes(original_tokens, target_tokens, mode="relaxed")
     )
 
     rewritten_segments: list[SubtitleSegment] = []
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
             for old_index, new_index in zip(range(i1, i2), range(j1, j2), strict=True):
-                start_time, end_time = segment_overrides.get(
-                    old_index,
-                    (
-                        original_segments[old_index].start_time,
-                        original_segments[old_index].end_time,
-                    ),
-                )
                 rewritten_segments.append(
                     SubtitleSegment(
                         text=target_tokens[new_index],
-                        start_time=start_time,
-                        end_time=end_time,
+                        start_time=original_segments[old_index].start_time,
+                        end_time=original_segments[old_index].end_time,
                     )
                 )
             continue
@@ -133,7 +120,6 @@ def rewrite_segments_with_timestamps(
                     insert_at=i1,
                     token_start=j1,
                     token_end=j2,
-                    segment_overrides=segment_overrides,
                 )
             )
             continue
@@ -159,7 +145,6 @@ def _build_insert_segments(
     insert_at: int,
     token_start: int,
     token_end: int,
-    segment_overrides: dict[int, tuple[int, int]],
 ) -> list[SubtitleSegment]:
     insert_count = token_end - token_start
     if insert_count <= 0:
@@ -175,17 +160,9 @@ def _build_insert_segments(
             left_anchor.end_time, right_anchor.start_time, insert_count
         )
     elif right_anchor is not None:
-        time_ranges = _split_time_range(
-            right_anchor.start_time, right_anchor.end_time, insert_count + 1
-        )
-        segment_overrides[insert_at] = time_ranges[-1]
-        time_ranges = time_ranges[:-1]
+        time_ranges = [(right_anchor.start_time, right_anchor.start_time)] * insert_count
     elif left_anchor is not None:
-        time_ranges = _split_time_range(
-            left_anchor.start_time, left_anchor.end_time, insert_count + 1
-        )
-        segment_overrides[insert_at - 1] = time_ranges[0]
-        time_ranges = time_ranges[1:]
+        time_ranges = [(left_anchor.end_time, left_anchor.end_time)] * insert_count
     else:
         time_ranges = [(0, 0)] * insert_count
 
@@ -276,13 +253,6 @@ def _split_time_range(
 
 
 def _render_edit_markers(old_tokens: list[str], new_tokens: list[str]) -> list[str]:
-    pair_count = min(len(old_tokens), len(new_tokens))
-    rendered = [
-        f"【{old_tokens[index]}/{new_tokens[index]}】" for index in range(pair_count)
-    ]
-
-    if len(old_tokens) > pair_count:
-        rendered.append(f"【{' '.join(old_tokens[pair_count:])}/∅】")
-    if len(new_tokens) > pair_count:
-        rendered.append(f"【∅/{' '.join(new_tokens[pair_count:])}】")
-    return rendered
+    old_text = " ".join(old_tokens) if old_tokens else "∅"
+    new_text = " ".join(new_tokens) if new_tokens else "∅"
+    return [f"【{old_text}/{new_text}】"]

@@ -7,14 +7,14 @@ import atexit
 import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 import json_repair
-from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
 from my_video.core.utils.text_diff import (
     render_inline_diff,
-    rewrite_segments_with_timestamps,
+    rewrite_sentence_segments_with_timestamps,
 )
 from my_video.core.utils.text_utils import count_words
 
@@ -307,7 +307,7 @@ class SubtitleOptimizer:
 
         检查:
         1. 键是否完全匹配
-        2. 改动（去掉标点符号）是否过大（相似度 < 0.7）
+        2. 改动（去掉标点符号）是否过大（相似度 < 0.6）
 
         Args:
             original_chunk: 原始字幕批次
@@ -344,10 +344,11 @@ class SubtitleOptimizer:
 
             original_bases = text_bases(original_text)
             optimized_bases = text_bases(optimized_text)
-            similarity = Levenshtein.normalized_similarity(
-                original_bases,
-                optimized_bases,
+            similarity = SequenceMatcher(
+                a=original_bases,
+                b=optimized_bases,
             )
+            similarity = similarity.ratio()
             similarity_threshold = 0.3 if count_words(original_text) <= 10 else 0.6
 
             # 相似度过低
@@ -378,7 +379,7 @@ class SubtitleOptimizer:
         new_groups: list[SubtitleSentence] = []
         for group in sentence_groups:
             optimized_text = optimized_dict.get(str(group.index))
-            if optimized_text is None or not optimized_text.strip():
+            if optimized_text is None or not optimized_text.strip() or optimized_text.strip() == group.text.strip():
                 group.optimized_text = ""
                 group.optimize_log = ""
                 new_groups.append(
@@ -392,26 +393,14 @@ class SubtitleOptimizer:
                 )
                 continue
 
-            if optimized_text.strip() == group.text.strip():
-                group.optimized_text = ""
-                group.optimize_log = ""
-                new_groups.append(
-                    cls._clone_sentence_group(
-                        group,
-                        text=group.text,
-                        optimized_text="",
-                        optimize_log="",
-                        segments=cls._copy_segments(group.segments),
-                    )
-                )
-                continue
-
+            # 回写到原本group的optimized_text和optimize_log字段，方便检查
             optimize_log = cls._build_group_change_log(group.text, optimized_text)
+            group.optimized_text = optimized_text
+            group.optimize_log = optimize_log
+            
             rewritten_segments = cls._rewrite_group_segments(
                 group.segments, optimized_text
             )
-            group.optimized_text = optimized_text
-            group.optimize_log = optimize_log
             new_groups.append(
                 cls._clone_sentence_group(
                     group,
@@ -429,11 +418,7 @@ class SubtitleOptimizer:
         original_segments: list[SubtitleSegment],
         optimized_text: str,
     ) -> list[SubtitleSegment]:
-        return rewrite_segments_with_timestamps(
-            original_segments,
-            optimized_text,
-            mode="strict",
-        )
+        return rewrite_sentence_segments_with_timestamps(original_segments, optimized_text)
 
     @classmethod
     def _build_group_change_log(cls, original_text: str, optimized_text: str) -> str:

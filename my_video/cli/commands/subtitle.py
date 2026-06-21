@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import traceback
 from argparse import Namespace
@@ -58,7 +59,9 @@ def run(args: Namespace, config: dict) -> int:
             sentence_data,
             reference_data=reference_data,
         )
+
         sentence_data.to_txt(paths.optimized_txt)
+        _write_tmp_optimized_json(_repo_root(), sentence_data)
         # 优化的文本后可能有标点符号的改动，所以需要重新分句号
         sentence_data = new_sentence_data.to_asr_data().to_sentence_data()
 
@@ -111,6 +114,25 @@ def _load_origin_subtitle_data(paths):
     from my_video.core.asr.asr_data import SubtitleSegments
 
     return SubtitleSegments.from_subtitle_file(str(subtitle_path))
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _write_tmp_optimized_json(root_path: Path, sentence_data) -> None:
+    export_path = root_path / "tmp.json"
+    payload = [
+        {
+            "txt": sentence.text,
+            "optimized_text": sentence.optimized_text,
+        }
+        for sentence in sentence_data.sentences
+    ]
+    export_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _prompt_choice(

@@ -1,0 +1,350 @@
+[
+  {
+    "index": 0,
+    "txt": "Hello and welcome to a basic intro to reverse engineering video games with Gidra.",
+    "optimized_text": "Hello and welcome to a basic intro to reverse engineering video games with Ghidra.",
+    "result": "Hello and welcome to a basic intro to reverse engineering video games with 【Gidra./Ghidra.】"
+  },
+  {
+    "index": 1,
+    "txt": "Gidra is one of the most powerful tools that a video game hacker has under their belt and we're going to be going through some of the just basics on how to get it working and how to use it in your projects for decompiling and modifying game behavior.",
+    "optimized_text": "Ghidra is one of the most powerful tools that a video game hacker has under their belt and we're going to be going through some of just the basics on how to get it working and how to use it in your projects for decompiling and modifying game behavior.",
+    "result": "【Gidra/Ghidra】 is one of the most powerful tools that a video game hacker has under their belt and we're going to be going through some of 【∅/just】 the 【just/∅】 basics on how to get it working and how to use it in your projects for decompiling and modifying game behavior."
+  },
+  {
+    "index": 2,
+    "txt": "You should know about how data formats work, because that's something that you'll also encounter in Ghidra, is how to deal with data as well as code.",
+    "optimized_text": "You should know about how data formats work, because that's something that you'll also encounter in Ghidra is how to deal with data as well as code.",
+    "result": "You should know about how data formats work, because that's something that you'll also encounter in 【Ghidra,/Ghidra】 is how to deal with data as well as code."
+  },
+  {
+    "index": 3,
+    "txt": "What makes Ghidra really special is that it decompiles code automatically.",
+    "optimized_text": "What makes Ghidra really special is that it decompiles code automatically,",
+    "result": "What makes Ghidra really special is that it decompiles code 【automatically./automatically,】"
+  },
+  {
+    "index": 4,
+    "txt": "But more to the point, what Gindra really does is it makes it easier to understand and modify game behavior on a very much deeper level, something approaching what the original designers were intending.",
+    "optimized_text": "But more to the point, what Ghidra really does is it makes it easier to understand and modify game behavior on a very much deeper level, something approaching what the original designers were intending.",
+    "result": "But more to the point, what 【Gindra/Ghidra】 really does is it makes it easier to understand and modify game behavior on a very much deeper level, something approaching what the original designers were intending."
+  },
+  {
+    "index": 5,
+    "txt": "A lot of people seem to think that it's a complicated process where you have to install clips and compile it from Java.",
+    "optimized_text": "A lot of people seem to think that it's a complicated process where you have to install Eclipse and compile it from Java.",
+    "result": "A lot of people seem to think that it's a complicated process where you have to install 【clips/Eclipse】 and compile it from Java."
+  },
+  {
+    "index": 6,
+    "txt": "Shared means you're working with a team with a bunch of different people, and that's something that I actually don't have any experience with because Github files are not files, to my knowledge, that you can just throw into version control and have that just work.",
+    "optimized_text": "Shared means you're working with a team with a bunch of different people, and that's something that I actually don't have any experience with because Ghidra files are not files, to my knowledge, that you can just throw into version control and have that just work.",
+    "result": "Shared means you're working with a team with a bunch of different people, and that's something that I actually don't have any experience with because 【Github/Ghidra】 files are not files, to my knowledge, that you can just throw into version control and have that just work."
+  },
+  {
+    "index": 7,
+    "txt": "you actually have to run something called a Gidra server in order to work with multiple people on the same project.",
+    "optimized_text": "You actually have to run something called a Ghidra server in order to work with multiple people on the same project.",
+    "result": "【you/You】 actually have to run something called a 【Gidra/Ghidra】 server in order to work with multiple people on the same project."
+  },
+  {
+    "index": 8,
+    "txt": "It'll say that, oh, you shouldn't do this.",
+    "optimized_text": "It'll say that you shouldn't do this.",
+    "result": "It'll say 【that, oh,/that】 you shouldn't do this."
+  },
+  {
+    "index": 9,
+    "txt": "identify more of the code.",
+    "optimized_text": "It'll identify more of the code.",
+    "result": "【∅/It'll】 identify more of the code."
+  },
+  {
+    "index": 10,
+    "txt": "Hit that later.",
+    "optimized_text": "Get to that later.",
+    "result": "【Hit/Get to】 that later."
+  },
+  {
+    "index": 11,
+    "txt": "And so by looking at this stuff and cross-referencing between the code and the sender library, you can understand a little bit about what code is being used where and how it works and so on and so forth.",
+    "optimized_text": "And so by looking at this stuff and cross-referencing between the code and the standard library, you can understand a little bit about what code is being used where and how it works and so on and so forth.",
+    "result": "And so by looking at this stuff and cross-referencing between the code and the 【sender/standard】 library, you can understand a little bit about what code is being used where and how it works and so on and so forth."
+  },
+  {
+    "index": 12,
+    "txt": "Decompiling is all about taking what you know and then inferring other things from what you know so that you know more And then with that increased knowledge, you can know even more and so on and so forth.",
+    "optimized_text": "Decompiling is all about taking what you know and then inferring other things from what you know so that you know more and then with that increased knowledge, you can know even more and so on and so forth.",
+    "result": "Decompiling is all about taking what you know and then inferring other things from what you know so that you know more 【And/and】 then with that increased knowledge, you can know even more and so on and so forth."
+  },
+  {
+    "index": 13,
+    "txt": "For example, this variable here has been assigned the value 3F800000.",
+    "optimized_text": "For example, this variable here has been assigned the value 0x3F800000.",
+    "result": "For example, this variable here has been assigned the value 【3F800000./0x3F800000.】"
+  },
+  {
+    "index": 14,
+    "txt": "There's a lot more nuance to it, of course, but The very, very basics of it have been explained.",
+    "optimized_text": "There's a lot more nuance to it, of course, but the very, very basics of it have been explained.",
+    "result": "There's a lot more nuance to it, of course, but 【The/the】 very, very basics of it have been explained."
+  },
+  {
+    "index": 15,
+    "txt": "Not going to touch on it here, but you can watch this video if you are interested.",
+    "optimized_text": "Not going to touch on here, but you can watch this video if you are interested.",
+    "result": "Not going to touch on 【it/∅】 here, but you can watch this video if you are interested."
+  },
+  {
+    "index": 16,
+    "txt": "We need a decompressor, any compressor for the specific compression type that the game is using.",
+    "optimized_text": "We need a decompressor and a compressor for the specific compression type that the game is using.",
+    "result": "We need a 【decompressor, any/decompressor and a】 compressor for the specific compression type that the game is using."
+  },
+  {
+    "index": 17,
+    "txt": "We know that that has to be the trajectory of the file, so that because we know that, we can use a debugging emulator, in this case, no cache PSX, to check when it's still in memory, and we can put a write breakpoint on it.",
+    "optimized_text": "We know that that has to be the trajectory of the file, so that because we know that, we can use a debugging emulator, in this case, NoCache PSX, to check when it's still in memory, and we can put a write breakpoint on it.",
+    "result": "We know that that has to be the trajectory of the file, so that because we know that, we can use a debugging emulator, in this case, 【no cache/NoCache】 PSX, to check when it's still in memory, and we can put a write breakpoint on it."
+  },
+  {
+    "index": 18,
+    "txt": "For example, If we're dealing with decompression, there's a very high chance that it's using some kind of LVSS variant decompression because that's typically what you saw in this era.",
+    "optimized_text": "For example, if we're dealing with decompression, there's a very high chance that it's using some kind of LZSS variant decompression because that's typically what you saw in this era.",
+    "result": "For example, 【If/if】 we're dealing with decompression, there's a very high chance that it's using some kind of 【LVSS/LZSS】 variant decompression because that's typically what you saw in this era."
+  },
+  {
+    "index": 19,
+    "txt": "A good way to get accustomed to how to use Gitra and the different features that it has is to just look at its right-click menu.",
+    "optimized_text": "A good way to get accustomed to how to use Ghidra and the different features that it has is to just look at its right-click menu.",
+    "result": "A good way to get accustomed to how to use 【Gitra/Ghidra】 and the different features that it has is to just look at its right-click menu."
+  },
+  {
+    "index": 20,
+    "txt": "but if you just look through you'll be able to see all the different things that you can do for example place bookmarks you want to take a look at this copy special function here because they actually hide a lot of important stuff that's very useful when you're dealing with different programs like you have to hit copy special in order to copy an address it's a little bit annoying but that's how it is there's a lot of important stuff over here on the right on the decompilation For example, you're going to want to use this edit function signature quite a bit.",
+    "optimized_text": "But if you just look through, you'll be able to see all the different things that you can do. For example, place bookmarks. You want to take a look at this copy special function here because they actually hide a lot of important stuff that's very useful when you're dealing with different programs. Like you have to hit copy special in order to copy an address. It's a little bit annoying, but that's how it is. There's a lot of important stuff over here on the right on the decompilation. For example, you're going to want to use this edit function signature quite a bit.",
+    "result": "【but/But】 if you just look 【through/through,】 you'll be able to see all the different things that you can 【do for example/do. For example,】 place 【bookmarks you/bookmarks. You】 want to take a look at this copy special function here because they actually hide a lot of important stuff that's very useful when you're dealing with different 【programs like/programs. Like】 you have to hit copy special in order to copy an 【address it's/address. It's】 a little bit 【annoying/annoying,】 but that's how it 【is there's/is. There's】 a lot of important stuff over here on the right on the 【decompilation/decompilation.】 For example, you're going to want to use this edit function signature quite a bit."
+  },
+  {
+    "index": 21,
+    "txt": "And now for maybe the most powerful and important feature of Gidra, and that's the way that it automatically tracks references.",
+    "optimized_text": "And now for maybe the most powerful and important feature of Ghidra, and that's the way that it automatically tracks references.",
+    "result": "And now for maybe the most powerful and important feature of 【Gidra,/Ghidra,】 and that's the way that it automatically tracks references."
+  },
+  {
+    "index": 22,
+    "txt": "And in order to create it, you can use the overlay manager if your extension supports it, or you could use the memory map and map it automatically Although in order to do that, your initial file has to actually contain that data.",
+    "optimized_text": "And in order to create it, you can use the overlay manager if your extension supports it, or you could use the memory map and map it automatically, although in order to do that, your initial file has to actually contain that data.",
+    "result": "And in order to create it, you can use the overlay manager if your extension supports it, or you could use the memory map and map it 【automatically Although/automatically, although】 in order to do that, your initial file has to actually contain that data."
+  },
+  {
+    "index": 23,
+    "txt": "So you're going to have to like sandwich your executable files together and create a new one and then have it analyze that and then manually specify which parts belong to which addresses.",
+    "optimized_text": "So you're going to have to sandwich your executable files together and create a new one and then have it analyze that and then manually specify which parts belong to which addresses.",
+    "result": "So you're going to have to 【like/∅】 sandwich your executable files together and create a new one and then have it analyze that and then manually specify which parts belong to which addresses."
+  },
+  {
+    "index": 24,
+    "txt": "And there's really no like, wrong way to get information and a lot of it comes down to just making guesses really of what something does and then assigning it a name and then hoping you're right and then checking on it later on so this is not so much a science as it is kind of an art and I know some people might not like that about it.",
+    "optimized_text": "And there's no wrong way to get information and a lot of it comes down to just making guesses of what something does and then assigning it a name and then hoping you're right and then checking on it later on, so this is not so much a science as it is an art and I know some people might not like that about it.",
+    "result": "And there's 【really/∅】 no 【like,/∅】 wrong way to get information and a lot of it comes down to just making guesses 【really/∅】 of what something does and then assigning it a name and then hoping you're right and then checking on it later 【on/on,】 so this is not so much a science as it is 【kind of/∅】 an art and I know some people might not like that about it."
+  },
+  {
+    "index": 25,
+    "txt": "But that's really not how decompilation works, and it's really not how hacking works in general.",
+    "optimized_text": "But that's not how decompilation works, and it's not how hacking works in general.",
+    "result": "But that's 【really/∅】 not how decompilation works, and it's 【really/∅】 not how hacking works in general."
+  },
+  {
+    "index": 26,
+    "txt": "So a lot of this, if you want to be a hacker, you kind of have to go for it yourself and try to figure it out and find out what's best for you.",
+    "optimized_text": "So a lot of this, if you want to be a hacker, you have to go for it yourself and try to figure it out and find out what's best for you.",
+    "result": "So a lot of this, if you want to be a hacker, you 【kind of/∅】 have to go for it yourself and try to figure it out and find out what's best for you."
+  },
+  {
+    "index": 27,
+    "txt": "What is pretty useful are call trees, because you can load up a function and then you can expand all of the functions that it calls and find this call tree.",
+    "optimized_text": "What is useful are call trees, because you can load up a function and then you can expand all of the functions that it calls and find this call tree.",
+    "result": "What is 【pretty/∅】 useful are call trees, because you can load up a function and then you can expand all of the functions that it calls and find this call tree."
+  },
+  {
+    "index": 28,
+    "txt": "For example, if you're looking for something that calls print, well, you can load up a function and then hit expand all, and it'll whoosh, expand all of the functions like this.",
+    "optimized_text": "For example, if you're looking for something that calls print, you can load up a function and then hit expand all, and it'll expand all of the functions like this.",
+    "result": "For example, if you're looking for something that calls print, 【well,/∅】 you can load up a function and then hit expand all, and it'll 【whoosh,/∅】 expand all of the functions like this."
+  },
+  {
+    "index": 29,
+    "txt": "Just what functions are being called by which functions, basically.",
+    "optimized_text": "Just what functions are being called by which functions.",
+    "result": "Just what functions are being called by which 【functions, basically./functions.】"
+  },
+  {
+    "index": 30,
+    "txt": "It kind of only knows how to search for ASCII strings.",
+    "optimized_text": "It only knows how to search for ASCII strings.",
+    "result": "It 【kind of/∅】 only knows how to search for ASCII strings."
+  },
+  {
+    "index": 31,
+    "txt": "So by the time you see this video, Ghidra might actually support any encoding string searching support, but currently it doesn't.",
+    "optimized_text": "So by the time you see this video, Ghidra might actually support any encoding string searching, but currently it doesn't.",
+    "result": "So by the time you see this video, Ghidra might actually support any encoding string 【searching support,/searching,】 but currently it doesn't."
+  },
+  {
+    "index": 32,
+    "txt": "Another thing you can do that's very important is set comments, obviously.",
+    "optimized_text": "Another thing you can do that's very important is set comments.",
+    "result": "Another thing you can do that's very important is set 【comments, obviously./comments.】"
+  },
+  {
+    "index": 33,
+    "txt": "Very, very useful for keeping track of code and stuff.",
+    "optimized_text": "Very useful for keeping track of code and stuff.",
+    "result": "【Very, very/Very】 useful for keeping track of code and stuff."
+  },
+  {
+    "index": 34,
+    "txt": "One of the most trickiest features to use is the scaler search.",
+    "optimized_text": "One of the trickiest features to use is the scaler search.",
+    "result": "One of the 【most/∅】 trickiest features to use is the scaler search."
+  },
+  {
+    "index": 35,
+    "txt": "Getting back to the image decompressor from blue, This is what the function looks like after I've decompiled it.",
+    "optimized_text": "Getting back to the image decompressor from Blue, this is what the function looks like after I've decompiled it.",
+    "result": "Getting back to the image decompressor from 【blue, This/Blue, this】 is what the function looks like after I've decompiled it."
+  },
+  {
+    "index": 36,
+    "txt": "If you want to read up on it, you can pause the video and look at this, but In these older games, it's pretty common to have a really simple decompression algorithm like this.",
+    "optimized_text": "If you want to read up on it, you can pause the video and look at this, but in these older games, it's pretty common to have a really simple decompression algorithm like this.",
+    "result": "If you want to read up on it, you can pause the video and look at this, but 【In/in】 these older games, it's pretty common to have a really simple decompression algorithm like this."
+  },
+  {
+    "index": 37,
+    "txt": "Now, the game itself will not have the code We're compressing the file because that's something that's done on the development computers and not the PlayStation 1 that's running the game.",
+    "optimized_text": "Now, the game itself will not have the code we're compressing because that's something that's done on the development computers and not the PlayStation 1 that's running the game.",
+    "result": "Now, the game itself will not have the code 【We're/we're】 compressing 【the file/∅】 because that's something that's done on the development computers and not the PlayStation 1 that's running the game."
+  },
+  {
+    "index": 38,
+    "txt": "So we have to come up with that ourself.",
+    "optimized_text": "So we have to come up with that ourselves.",
+    "result": "So we have to come up with that 【ourself./ourselves.】"
+  },
+  {
+    "index": 39,
+    "txt": "And That's kind of what we were expecting, something like this where VSYNC is not being passed a static number, but a variable.",
+    "optimized_text": "And that's kind of what we were expecting, something like this where VSync is not being passed a static number, but a variable.",
+    "result": "And 【That's/that's】 kind of what we were expecting, something like this where 【VSYNC/VSync】 is not being passed a static number, but a variable."
+  },
+  {
+    "index": 40,
+    "txt": "So what the game is doing is it reads this memory address, which I have renamed VSYNC indicator, and it uses that as a parameter to feed to VSYNC.",
+    "optimized_text": "So what the game is doing is it reads this memory address, which I have renamed VSync indicator, and it uses that as a parameter to feed to VSync.",
+    "result": "So what the game is doing is it reads this memory address, which I have renamed 【VSYNC/VSync】 indicator, and it uses that as a parameter to feed to 【VSYNC./VSync.】"
+  },
+  {
+    "index": 41,
+    "txt": "2 means that it waits 2 vblank periods for every frame, which results in a 30 FPS on NTSC consoles, but a value of 1 results in 1 vblank instance per frame, which results in 60 FPS.",
+    "optimized_text": "2 means that it waits 2 vblank periods for every frame, which results in 30 FPS on NTSC consoles, but a value of 1 results in 1 vblank instance per frame, which results in 60 FPS.",
+    "result": "2 means that it waits 2 vblank periods for every frame, which results in 【a/∅】 30 FPS on NTSC consoles, but a value of 1 results in 1 vblank instance per frame, which results in 60 FPS."
+  },
+  {
+    "index": 42,
+    "txt": "The kerning is much, much better on a half-width font, especially if we could control the font itself and add some details to it that makes it look better.",
+    "optimized_text": "The kerning is much, much better on a half-width font, especially if we could control the font itself and add some details to it that make it look better.",
+    "result": "The kerning is much, much better on a half-width font, especially if we could control the font itself and add some details to it that 【makes/make】 it look better."
+  },
+  {
+    "index": 43,
+    "txt": "For example, the serifs on this eye gives it a lot more width, so that it doesn't look so out of place.",
+    "optimized_text": "For example, the serifs on this I give it a lot more width, so that it doesn't look so out of place.",
+    "result": "For example, the serifs on this 【eye gives/I give】 it a lot more width, so that it doesn't look so out of place."
+  },
+  {
+    "index": 44,
+    "txt": "For example, this eye doesn't have those serifs, so it looks super thin, and it creates a lot of empty space.",
+    "optimized_text": "For example, this I doesn't have those serifs, so it looks super thin, and it creates a lot of empty space.",
+    "result": "For example, this 【eye/I】 doesn't have those serifs, so it looks super thin, and it creates a lot of empty space."
+  },
+  {
+    "index": 45,
+    "txt": "The best kind of font is a variable-width font This is what I did for Boku no Natsuyasumi 2, is I implemented a variable width font, but that takes more work, and it's not always necessary for a very low-resolution game like a PS1 game.",
+    "optimized_text": "The best kind of font is a variable-width font. This is what I did for Boku no Natsuyasumi 2, is I implemented a variable width font, but that takes more work, and it's not always necessary for a very low-resolution game like a PS1 game.",
+    "result": "The best kind of font is a variable-width 【font/font.】 This is what I did for Boku no Natsuyasumi 2, is I implemented a variable width font, but that takes more work, and it's not always necessary for a very low-resolution game like a PS1 game."
+  },
+  {
+    "index": 46,
+    "txt": "It's called krom2-rawad, which is quite a mouthful.",
+    "optimized_text": "It's called Krom2RawAdd, which is quite a mouthful.",
+    "result": "It's called 【krom2-rawad,/Krom2RawAdd,】 which is quite a mouthful."
+  },
+  {
+    "index": 47,
+    "txt": "But we know that how it works is we give it the encoded SGIS character, and it gives us an address in the kernel of the character of the font.",
+    "optimized_text": "But we know that how it works is we give it the encoded SJIS character, and it gives us an address in the kernel of the character of the font.",
+    "result": "But we know that how it works is we give it the encoded 【SGIS/SJIS】 character, and it gives us an address in the kernel of the character of the font."
+  },
+  {
+    "index": 48,
+    "txt": "From there, it's very easy to trace within the code where the text rendering function is, because the function will, in theory, call this KROM to raw add, and then it will perform some sort of memory to VRAM copy, where it copies first from the BIOS to memory, and then it uploads that character from memory into VRAM.",
+    "optimized_text": "From there, it's very easy to trace within the code where the text rendering function is, because the function will, in theory, call this Krom2RawAdd, and then it will perform some sort of memory to VRAM copy, where it copies first from the BIOS to memory, and then it uploads that character from memory into VRAM.",
+    "result": "From there, it's very easy to trace within the code where the text rendering function is, because the function will, in theory, call this 【KROM to raw add,/Krom2RawAdd,】 and then it will perform some sort of memory to VRAM copy, where it copies first from the BIOS to memory, and then it uploads that character from memory into VRAM."
+  },
+  {
+    "index": 49,
+    "txt": "And by doing that, by tracing it, we look at kromptorawadd, and we can see which function is calling it.",
+    "optimized_text": "And by doing that, by tracing it, we look at Krom2RawAdd, and we can see which function is calling it.",
+    "result": "And by doing that, by tracing it, we look at 【kromptorawadd,/Krom2RawAdd,】 and we can see which function is calling it."
+  },
+  {
+    "index": 50,
+    "txt": "So we can see the C decompilation of the code that we wrote ourself.",
+    "optimized_text": "So we can see the C decompilation of the code that we wrote ourselves.",
+    "result": "So we can see the C decompilation of the code that we wrote 【ourself./ourselves.】"
+  },
+  {
+    "index": 51,
+    "txt": "so we can fit more characters per line and we have changed the encoding entirely we don't use two byte characters anymore we just use single byte characters and it's much more narrow and nice looking without any of that anti-aliasing.",
+    "optimized_text": "So we can fit more characters per line and we have changed the encoding entirely. We don't use two byte characters anymore, we just use single byte characters, and it's much more narrow and nice looking without any of that anti-aliasing.",
+    "result": "【so/So】 we can fit more characters per line and we have changed the encoding 【entirely we/entirely. We】 don't use two byte characters 【anymore/anymore,】 we just use single byte 【characters/characters,】 and it's much more narrow and nice looking without any of that anti-aliasing."
+  },
+  {
+    "index": 52,
+    "txt": "Hydra is cool because it lets you dig up all sorts of weird stuff for example there's a game that may or may not be coming in the future that uses something called the iMode.",
+    "optimized_text": "Ghidra is cool because it lets you dig up all sorts of weird stuff, for example there's a game that may or may not be coming in the future that uses something called the iMode.",
+    "result": "【Hydra/Ghidra】 is cool because it lets you dig up all sorts of weird 【stuff/stuff,】 for example there's a game that may or may not be coming in the future that uses something called the iMode."
+  },
+  {
+    "index": 53,
+    "txt": "Now, the biggest project that I've worked on involving Gijra is Boku no Natsuyasumi 2.",
+    "optimized_text": "Now, the biggest project that I've worked on involving Ghidra is Boku no Natsuyasumi 2.",
+    "result": "Now, the biggest project that I've worked on involving 【Gijra/Ghidra】 is Boku no Natsuyasumi 2."
+  },
+  {
+    "index": 54,
+    "txt": "Besides that, The game didn't allow you to edit any of the files at all and would actually just crash itself if you tried to edit anything.",
+    "optimized_text": "Besides that, the game didn't allow you to edit any of the files at all and would actually just crash itself if you tried to edit anything.",
+    "result": "Besides that, 【The/the】 game didn't allow you to edit any of the files at all and would actually just crash itself if you tried to edit anything."
+  },
+  {
+    "index": 55,
+    "txt": "There is a lot of work that had to go into the Boku no Nasu Yasumi 2 patch on a technical front.",
+    "optimized_text": "There is a lot of work that had to go into the Boku no Natsuyasumi 2 patch on a technical front.",
+    "result": "There is a lot of work that had to go into the Boku no 【Nasu Yasumi/Natsuyasumi】 2 patch on a technical front."
+  },
+  {
+    "index": 56,
+    "txt": "Yeah, GIDRA is a product of the United States National Security Agency, which, you know, you might feel a certain ways about that.",
+    "optimized_text": "Yeah, Ghidra is a product of the United States National Security Agency, which, you know, you might feel a certain ways about that.",
+    "result": "Yeah, 【GIDRA/Ghidra】 is a product of the United States National Security Agency, which, you know, you might feel a certain ways about that."
+  },
+  {
+    "index": 57,
+    "txt": "I wanted to just give a basic overview of what Gidra does and how it can be useful so that maybe you're interested in learning more about it.",
+    "optimized_text": "I wanted to just give a basic overview of what Ghidra does and how it can be useful so that maybe you're interested in learning more about it.",
+    "result": "I wanted to just give a basic overview of what 【Gidra/Ghidra】 does and how it can be useful so that maybe you're interested in learning more about it."
+  }
+]

@@ -44,6 +44,40 @@ class TestSubtitleOptimizerWriteBack:
             (160, 260),
         ]
 
+    def test_insert_at_start_uses_next_start_time_as_zero_length(self) -> None:
+        segments = [
+            make_seg("identify", 100, 180),
+            make_seg("more", 180, 250),
+        ]
+
+        rewritten = SubtitleOptimizer._rewrite_group_segments(
+            segments, "It'll identify more"
+        )
+
+        assert [seg.text for seg in rewritten] == ["It'll", "identify", "more"]
+        assert [(seg.start_time, seg.end_time) for seg in rewritten] == [
+            (100, 100),
+            (100, 180),
+            (180, 250),
+        ]
+
+    def test_insert_at_end_uses_previous_end_time_as_zero_length(self) -> None:
+        segments = [
+            make_seg("hello", 0, 100),
+            make_seg("world", 100, 220),
+        ]
+
+        rewritten = SubtitleOptimizer._rewrite_group_segments(
+            segments, "hello world again"
+        )
+
+        assert [seg.text for seg in rewritten] == ["hello", "world", "again"]
+        assert [(seg.start_time, seg.end_time) for seg in rewritten] == [
+            (0, 100),
+            (100, 220),
+            (220, 220),
+        ]
+
     def test_optimize_log_uses_inline_diff_with_candidate_display(self) -> None:
         groups = [
             SubtitleSentence(
@@ -77,6 +111,23 @@ class TestSubtitleOptimizerWriteBack:
 
 
 class TestSubtitleOptimizerFlow:
+    def test_validate_optimization_result_uses_difflib_ratio_thresholds(self) -> None:
+        optimizer = SubtitleOptimizer(
+            thread_num=1,
+            batch_num=2,
+            model="test-model",
+            custom_prompt="",
+        )
+
+        is_valid, error_message = optimizer._validate_optimization_result(
+            original_chunk={"0": "alpha beta gamma"},
+            optimized_chunk={"0": "alpha theta gamma extra"},
+        )
+
+        assert is_valid
+        assert error_message == ""
+        optimizer.stop()
+
     def test_optimize_subtitle_writes_back_to_input_and_returns_clean_object(
         self, monkeypatch
     ) -> None:

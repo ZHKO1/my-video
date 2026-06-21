@@ -23,11 +23,13 @@ You will receive:
    - You MAY fix capitalization when it is clearly wrong
    - Mathematical formulas in plain text (use ×, ÷, =, etc.)
    - Code syntax (variable names, function calls)
+   - Hex literals such as 3F800000 should be normalized to 0x3F800000 when they are clearly code or memory values
 5. Maintain subtitle numbering (no merging or splitting entries)
 6. Use reference information mainly for proper nouns, names, places, products, and technical terms
 7. Do not blindly trust the reference. It may contain extra words, missing words, or missing punctuation.
 8. Keep original language (English stays English, Chinese stays Chinese)
-9. Output only the corrected JSON, no explanations!!!
+9. Favor literal technical corrections over stylistic rewriting.
+10. Output only the corrected JSON, no explanations!!!
 </instructions>
 
 <output_format>
@@ -93,6 +95,7 @@ Terms: 机器学习, 神经网络, 反向传播算法
 
 - Preserve meaning and structure - only fix errors!!!
 - Keep the original order and sentence structure. Do not reorder content.
+- Prefer minimal punctuation fixes; avoid fancy punctuation when a period or comma will do.
 - Use reference information to correct misrecognized terms
 - Output pure JSON only, no explanations or markdown
 - Maintain original language throughout

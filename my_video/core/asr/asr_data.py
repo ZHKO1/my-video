@@ -68,7 +68,7 @@ class SubtitleLine:
 class SubtitleSegments:
     def __init__(self, segments: list[SubtitleSegment]):
         filtered_segments = [seg for seg in segments if seg.text and seg.text.strip()]
-        filtered_segments.sort(key=lambda x: x.start_time)
+        filtered_segments.sort(key=lambda x: (x.start_time, x.end_time))
         self.segments = filtered_segments
 
     def to_txt(

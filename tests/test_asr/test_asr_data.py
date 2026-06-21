@@ -175,6 +175,21 @@ class TestSubtitleSegmentsTextIO:
         assert content == "hello world"
         assert txt_path.read_text(encoding="utf-8") == content
 
+    def test_segments_are_sorted_by_start_then_end_time(self) -> None:
+        subtitle_segments = SubtitleSegments(
+            [
+                SubtitleSegment("later", 100, 300),
+                SubtitleSegment("shorter", 100, 200),
+                SubtitleSegment("first", 0, 50),
+            ]
+        )
+
+        assert [seg.text for seg in subtitle_segments.segments] == [
+            "first",
+            "shorter",
+            "later",
+        ]
+
     def test_from_srt_parses_single_line_text(self) -> None:
         srt_content = """1
 00:00:01,000 --> 00:00:02,500

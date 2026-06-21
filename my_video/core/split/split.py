@@ -4,15 +4,16 @@ import re
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any
 
 import json_repair
-from rapidfuzz.distance import Levenshtein
 
 from my_video.cli import output
 from my_video.core.asr.asr_data import SubtitleLine, SubtitleSegment, SubtitleSentence
 from my_video.core.llm import call_llm, get_response_id
 from my_video.core.prompts import get_prompt
+from my_video.core.utils.helper import text_tokens
 from my_video.core.utils.text_utils import count_words, is_mainly_cjk
 
 MAX_STEPS = 3
@@ -374,7 +375,10 @@ class SubtitleSplitter:
             return 1.0
         if not normalized_left and not normalized_right:
             return 1.0
-        return Levenshtein.normalized_similarity(normalized_left, normalized_right)
+        return SequenceMatcher(
+            a=text_tokens(normalized_left),
+            b=text_tokens(normalized_right),
+        ).ratio()
 
     @staticmethod
     def _is_cjk_text(text: str) -> bool:
