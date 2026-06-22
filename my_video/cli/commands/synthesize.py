@@ -155,21 +155,13 @@ def _generate_output_md(paths: WorkspacePaths) -> None:
     if not isinstance(info, dict):
         raise RuntimeError(f"info.json must contain a JSON object: {paths.info_path}")
 
-    required_fields = ["webpage_url", "title", "uploader", "release_timestamp"]
+    required_fields = ["webpage_url", "title", "uploader", "upload_date"]
     missing = [f for f in required_fields if f not in info]
     if missing:
         raise RuntimeError(f"info.json missing required fields: {', '.join(missing)}")
 
-    raw_ts = info["release_timestamp"]
-    try:
-        timestamp = int(raw_ts)
-    except (ValueError, TypeError) as exc:
-        raise RuntimeError(
-            f"release_timestamp is not a valid integer: {raw_ts!r}"
-        ) from exc
-
-    dt = datetime.fromtimestamp(timestamp, _BEIJING_TZ)
-    release_date = f"{dt.year}年{dt.month}月{dt.day}日"
+    upload_date = info["upload_date"]
+    release_date = f"{upload_date}"
 
     content = (
         f"视频: {info['webpage_url']}\n"

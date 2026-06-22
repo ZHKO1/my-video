@@ -1,6 +1,5 @@
 import atexit
 import json
-import re
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -10,16 +9,20 @@ from typing import Any
 import json_repair
 
 from my_video.cli import output
-from my_video.core.asr.asr_data import SubtitleLine, SubtitleSegment, SubtitleSentence
+from my_video.core.asr.asr_data import (
+    SubtitleLine,
+    SubtitleLines,
+    SubtitleSegment,
+    SubtitleSentence,
+)
 from my_video.core.llm import call_llm, get_response_id
 from my_video.core.prompts import get_prompt
-from my_video.core.utils.helper import text_tokens
-from my_video.core.utils.text_utils import count_words, is_mainly_cjk
+from my_video.core.utils.helper import text_bases
+from my_video.core.utils.text_utils import count_words
 
 MAX_STEPS = 3
 CONTENT_SIMILARITY_THRESHOLD = 0.95
 MATCH_SIMILARITY_THRESHOLD = 0.8
-PUNCTUATION_PATTERN = re.compile(r"[^\w\s]", re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -52,19 +55,20 @@ class SubtitleSplitter:
 
     def split_subtitle(
         self, sentence_groups: list[SubtitleSentence]
-    ) -> list[SubtitleLine]:
+    ) -> SubtitleLines:
         requests = [
             SplitRequest(group_index=group.index, text=group.text)
             for group in sentence_groups
             if not self._is_within_limit(group.text)
         ]
-        split_results = self._process_requests(self._batch_requests(requests))
+        batches = self._batch_requests(requests)
+        split_results = self._parallel_split(batches)
 
         subtitle_lines: list[SubtitleLine] = []
         for group in sentence_groups:
             parts = split_results.get(group.index, [group.text])
             subtitle_lines.extend(self._build_subtitle_lines(group, parts))
-        return subtitle_lines
+        return SubtitleLines(subtitle_lines)
 
     def _batch_requests(self, requests: list[SplitRequest]) -> list[dict[str, str]]:
         return [
@@ -75,14 +79,14 @@ class SubtitleSplitter:
             for i in range(0, len(requests), self.batch_num)
         ]
 
-    def _process_requests(self, batches: list[dict[str, str]]) -> dict[int, list[str]]:
+    def _parallel_split(self, batches: list[dict[str, str]]) -> dict[int, list[str]]:
         if not self.executor:
             raise ValueError("Thread pool not initialized")
         if not batches:
             return {}
 
         futures = [
-            self.executor.submit(self._process_batch, batch) for batch in batches
+            self.executor.submit(self._split_chunk, batch) for batch in batches
         ]
         split_results: dict[int, list[str]] = {}
 
@@ -97,7 +101,7 @@ class SubtitleSplitter:
 
         return split_results
 
-    def _process_batch(self, batch: dict[str, str]) -> dict[int, list[str]]:
+    def _split_chunk(self, batch: dict[str, str]) -> dict[int, list[str]]:
         start_idx = next(iter(batch))
         end_idx = next(reversed(batch))
         output.info(f"[+]Spliting subtitles: {start_idx} - {end_idx}")
@@ -288,8 +292,11 @@ class SubtitleSplitter:
         cursor = 0
 
         for part_index, part in enumerate(parts):
+            # 最后一部分，直接根据segments的剩下部分来检查
             if part_index == len(parts) - 1:
-                final_text = self._segments_to_text(segments[cursor:], part)
+                final_text = self._join_parts(
+                    [segment.text.strip() for segment in segments[cursor:]]
+                )
                 final_score = self._text_similarity(part, final_text)
                 if final_score < MATCH_SIMILARITY_THRESHOLD:
                     raise ValueError(
@@ -304,8 +311,12 @@ class SubtitleSplitter:
             best_end: int | None = None
 
             for end_idx in range(cursor, candidate_stop):
-                candidate_text = self._segments_to_text(
-                    segments[cursor : end_idx + 1], part
+                candidate_text = self._join_parts(
+                    [
+                        segment.text.strip()
+                        for segment in segments[cursor : end_idx + 1]
+                        if segment.text.strip()
+                    ]
                 )
                 score = self._text_similarity(part, candidate_text)
                 if score > best_score:
@@ -326,14 +337,6 @@ class SubtitleSplitter:
             raise ValueError("segment alignment overflow")
         return matches
 
-    def _segments_to_text(
-        self, segments: list[SubtitleSegment], reference_text: str
-    ) -> str:
-        texts = [segment.text.strip() for segment in segments if segment.text.strip()]
-        if self._is_cjk_text(reference_text):
-            return "".join(texts)
-        return " ".join(texts)
-
     def _build_content_feedback(
         self, original: str, merged: str, *, label: str
     ) -> str | None:
@@ -350,40 +353,16 @@ class SubtitleSplitter:
         return [part.strip() for part in text.split("<br>") if part.strip()]
 
     def _join_parts(self, parts: list[str]) -> str:
-        if not parts:
-            return ""
-        raw_text = "".join(parts)
-        if self._is_cjk_text(raw_text):
-            return raw_text
         return " ".join(part.strip() for part in parts if part.strip())
 
-    @staticmethod
-    def _normalize_text(text: str) -> str:
-        stripped = text.strip()
-        if SubtitleSplitter._is_cjk_text(stripped):
-            return re.sub(r"\s+", "", stripped)
-        return " ".join(stripped.split()).lower()
-
-    @staticmethod
-    def _canonicalize_text(text: str) -> str:
-        return PUNCTUATION_PATTERN.sub("", SubtitleSplitter._normalize_text(text))
-
     def _text_similarity(self, left: str, right: str) -> float:
-        normalized_left = self._canonicalize_text(left)
-        normalized_right = self._canonicalize_text(right)
-        if normalized_left == normalized_right:
+        left_bases = text_bases(left)
+        right_bases = text_bases(right)
+        if left_bases == right_bases:
             return 1.0
-        if not normalized_left and not normalized_right:
+        if not left_bases and not right_bases:
             return 1.0
-        return SequenceMatcher(
-            a=text_tokens(normalized_left),
-            b=text_tokens(normalized_right),
-        ).ratio()
-
-    @staticmethod
-    def _is_cjk_text(text: str) -> bool:
-        stripped = text.strip()
-        return bool(stripped) and is_mainly_cjk(stripped)
+        return SequenceMatcher(a=left_bases, b=right_bases).ratio()
 
     def _is_within_limit(self, text: str) -> bool:
         return count_words(text) <= self.max_word_count

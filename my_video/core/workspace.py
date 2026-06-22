@@ -35,6 +35,7 @@ class WorkspacePaths:
     # punctuation_txt: Path
     origin_txt: Path
     optimized_txt: Path
+    split_txt: Path
     summary_json: Path
     output_mp4: Path
     output_md: Path
@@ -61,6 +62,7 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         compare_txt=subtitle_dir / "compare.txt",
         origin_txt=subtitle_dir / "origin.txt",
         optimized_txt=subtitle_dir / "optimized.txt",
+        split_txt=subtitle_dir / "split.txt",
         summary_json=subtitle_dir / "summary.json",
         output_mp4=base / "output.mp4",
         output_md=base / "output.md",

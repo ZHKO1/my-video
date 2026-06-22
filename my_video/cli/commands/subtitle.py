@@ -10,7 +10,6 @@ from pathlib import Path
 
 from my_video.cli import EXIT, output
 from my_video.cli.config import get_toml_value
-from my_video.core.subtitle_io import write_subtitle_lines_to_srt
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
 
@@ -73,6 +72,7 @@ def run(args: Namespace, config: dict) -> int:
             max_word_count=max_word_count,
         )
         subtitle_lines = splitter.split_subtitle(sentence_data.sentences)
+        subtitle_lines.to_txt(paths.split_txt)
 
         # if not paths.summary_json.exists():
         #     summary_input_path = paths.subtitle_dir / ".summary_input.txt"
@@ -88,12 +88,8 @@ def run(args: Namespace, config: dict) -> int:
         )
         translated_lines = translator.translate_subtitle(subtitle_lines)
 
-        write_subtitle_lines_to_srt(
-            translated_lines, paths.src_srt, use_translation=False
-        )
-        write_subtitle_lines_to_srt(
-            translated_lines, paths.trans_srt, use_translation=True
-        )
+        translated_lines.to_srt(paths.src_srt, is_translation=False)
+        translated_lines.to_srt(paths.trans_srt, is_translation=True)
 
         output.success(f"Subtitle files saved to {paths.src_srt} and {paths.trans_srt}")
         return EXIT.SUCCESS

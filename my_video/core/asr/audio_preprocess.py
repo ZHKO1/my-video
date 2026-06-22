@@ -1,10 +1,12 @@
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from pydub import AudioSegment
 
 from my_video.cli import output
 from my_video.core.utils.decorator import skip_fun_if_file_exist
+from my_video.core.utils.helper import write_srt
 
 
 def _ffmpeg_has_encoder(encoder_name: str) -> bool:
@@ -60,21 +62,20 @@ def normalize_audio_volume(
     return output_path
 
 
+def whisperx_segments_to_srt_entries(
+    segments: list[dict[str, Any]],
+) -> list[tuple[int, int, int, str]]:
+    entries: list[tuple[int, int, int, str]] = []
+    for segment in segments:
+        text = str(segment.get("text", "")).strip()
+        if not text:
+            continue
+        start_ms = max(0, round(float(segment["start"]) * 1000))
+        end_ms = max(0, round(float(segment["end"]) * 1000))
+        entries.append((len(entries) + 1, start_ms, end_ms, text))
+    return entries
+
+
 def save_srt(segments: list[dict], output_path: Path) -> None:
-    def _fmt(ts: float) -> str:
-        total_ms = max(0, round(ts * 1000))
-        hours, rem = divmod(total_ms, 3_600_000)
-        minutes, rem = divmod(rem, 60_000)
-        seconds, millis = divmod(rem, 1000)
-        return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
-
-    with open(str(output_path), "w", encoding="utf-8") as f:
-        for index, segment in enumerate(segments, start=1):
-            text = segment.get("text", "").strip()
-            if not text:
-                continue
-            f.write(f"{index}\n")
-            f.write(f"{_fmt(segment['start'])} --> {_fmt(segment['end'])}\n")
-            f.write(f"{text}\n\n")
-
+    write_srt(output_path, whisperx_segments_to_srt_entries(segments))
     output.info(f"Subtitle file saved to {output_path!s}")

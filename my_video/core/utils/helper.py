@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 TOKEN_SPLIT_PATTERN = re.compile(r"\s+")
 WHITESPACE_PATTERN = re.compile(r"\s+")
@@ -107,3 +107,34 @@ def token_bases(tokens: list[str]) -> list[str]:
         EDGE_PUNCTUATION_PATTERN.sub("", split_token_parts(token).base).lower()
         for token in tokens
     ]
+
+
+def format_srt_timestamp(milliseconds: int) -> str:
+    hours, remainder = divmod(max(0, milliseconds), 3600000)
+    minutes, remainder = divmod(remainder, 60000)
+    seconds, ms = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{ms:03d}"
+
+
+def build_srt_text(entries: Iterable[tuple[int, int, int, str]]) -> str:
+    blocks: list[str] = []
+    for index, start_ms, end_ms, text in entries:
+        normalized_text = str(text).strip()
+        if not normalized_text:
+            continue
+        blocks.append(
+            "\n".join(
+                [
+                    str(index),
+                    f"{format_srt_timestamp(start_ms)} --> {format_srt_timestamp(end_ms)}",
+                    normalized_text,
+                ]
+            )
+        )
+    return "\n\n".join(blocks) + ("\n" if blocks else "")
+
+
+def write_srt(path: str | Path, entries: Iterable[tuple[int, int, int, str]]) -> None:
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(build_srt_text(entries), encoding="utf-8")

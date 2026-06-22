@@ -3,6 +3,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from my_video.core.utils.helper import write_srt
+from my_video.core.utils.text_utils import count_words
+
 SENTENCE_END_PATTERN = re.compile(r"[?!.？！。]+$")
 SRT_TRAILING_H_PATTERN = re.compile(r"(?:\\h)+$")
 
@@ -63,6 +66,58 @@ class SubtitleLine:
     @property
     def line_id(self) -> str:
         return f"{self.group_index}:{self.line_index}"
+
+
+class SubtitleLines:
+    def __init__(self, lines: list[SubtitleLine]):
+        self.lines = list(lines)
+
+    def to_txt(self, save_path: str | Path | None = None) -> str:
+        output_lines: list[str] = []
+        current_group_index: int | None = None
+        current_group: list[SubtitleLine] = []
+
+        def flush_group() -> None:
+            if not current_group:
+                return
+            group_index = current_group[0].group_index
+            if len(current_group) == 1:
+                output_lines.append(f"{group_index}. {current_group[0].text}")
+            else:
+                output_lines.append(f"{group_index}. ")
+                for line in current_group:
+                    output_lines.append(f"【{count_words(line.text)}】{line.text}")
+
+        for line in self.lines:
+            if current_group_index is None:
+                current_group_index = line.group_index
+            if line.group_index != current_group_index:
+                flush_group()
+                current_group = []
+                current_group_index = line.group_index
+            current_group.append(line)
+
+        flush_group()
+        content = "\n".join(output_lines)
+        if save_path is not None:
+            path = Path(save_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        return content
+
+    def to_srt(self, path: str | Path, is_translation: bool) -> None:
+        write_srt(
+            path,
+            (
+                (
+                    index,
+                    line.start_time,
+                    line.end_time,
+                    line.translate_text if is_translation else line.text,
+                )
+                for index, line in enumerate(self.lines, start=1)
+            ),
+        )
 
 
 class SubtitleSegments:

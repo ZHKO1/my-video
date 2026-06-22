@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from my_video.cli import output
-from my_video.core.asr.asr_data import SubtitleLine
+from my_video.core.asr.asr_data import SubtitleLine, SubtitleLines
 from my_video.core.translate.types import TargetLanguage
 from my_video.core.utils.cache import generate_cache_key, get_translate_cache
 
@@ -32,11 +32,11 @@ class BaseTranslator(ABC):
         atexit.register(self.stop)
 
     def translate_subtitle(
-        self, subtitle_data: list[SubtitleLine]
-    ) -> list[SubtitleLine]:
+        self, subtitle_data: SubtitleLines
+    ) -> SubtitleLines:
         """翻译字幕文件并回写翻译结果。"""
         try:
-            chunks = self._batch_subtitle_lines(subtitle_data)
+            chunks = self._batch_subtitle_lines(subtitle_data.lines)
 
             # 多线程翻译
             self._parallel_translate(chunks)

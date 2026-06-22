@@ -3,7 +3,6 @@
 import json
 import os
 import threading
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -21,6 +20,7 @@ from tenacity import (
 from my_video.cli import output
 from my_video.cli.config import get_work_dir, load_toml_config
 from my_video.core.utils.cache import get_llm_cache, memoize
+from my_video.core.workspace import format_beijing_time
 
 _global_client: OpenAI | None = None
 _client_lock = threading.Lock()
@@ -154,7 +154,7 @@ def _write_llm_log(
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {get_response_id(response)} {status}",
+        f"{format_beijing_time()} {get_response_id(response)} {status}",
         "req:",
         _get_request_content(messages),
         "res:",
@@ -200,7 +200,7 @@ def _call_llm_api(
 
 
 # TODO 记得改expire
-@memoize(get_llm_cache(), expire=360000, typed=True)
+@memoize(get_llm_cache(), expire=3600000, typed=True)
 def call_llm(
     messages: list[dict],
     model: str,
