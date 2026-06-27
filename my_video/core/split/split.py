@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any
 
-import json_repair
-
 from my_video.cli import output
 from my_video.core.asr.asr_data import (
     SubtitleLine,
@@ -15,7 +13,12 @@ from my_video.core.asr.asr_data import (
     SubtitleSegment,
     SubtitleSentence,
 )
-from my_video.core.llm import call_llm, get_response_id
+from my_video.core.llm import (
+    call_llm,
+    extract_response_text,
+    get_response_id,
+    parse_json_dict,
+)
 from my_video.core.prompts import get_prompt
 from my_video.core.utils.helper import text_bases
 from my_video.core.utils.text_utils import count_words
@@ -67,7 +70,7 @@ class SubtitleSplitter:
         subtitle_lines: list[SubtitleLine] = []
         next_line_index = 0
         for group in sentence_groups:
-            parts = split_results.get(group.index, [group.text])
+            parts = split_results.get(str(group.index), [group.text])
             group_lines = self._build_subtitle_lines(
                 group,
                 parts,
@@ -86,7 +89,7 @@ class SubtitleSplitter:
             for i in range(0, len(requests), self.batch_num)
         ]
 
-    def _parallel_split(self, batches: list[dict[str, str]]) -> dict[int, list[str]]:
+    def _parallel_split(self, batches: list[dict[str, str]]) -> dict[str, list[str]]:
         if not self.executor:
             raise ValueError("Thread pool not initialized")
         if not batches:
@@ -95,7 +98,7 @@ class SubtitleSplitter:
         futures = [
             self.executor.submit(self._split_chunk, batch) for batch in batches
         ]
-        split_results: dict[int, list[str]] = {}
+        split_results: dict[str, list[str]] = {}
 
         for future in as_completed(futures):
             if not self.is_running:
@@ -108,7 +111,7 @@ class SubtitleSplitter:
 
         return split_results
 
-    def _split_chunk(self, batch: dict[str, str]) -> dict[int, list[str]]:
+    def _split_chunk(self, batch: dict[str, str]) -> dict[str, list[str]]:
         start_idx = next(iter(batch))
         end_idx = next(reversed(batch))
         output.info(f"[+]Spliting subtitles: {start_idx} - {end_idx}")
@@ -117,9 +120,9 @@ class SubtitleSplitter:
             return self._agent_loop(batch)
         except Exception as exc:
             output.error(f"Split failed: {exc}")
-            return {int(key): [text] for key, text in batch.items()}
+            return {key: [text] for key, text in batch.items()}
 
-    def _agent_loop(self, batch: dict[str, str]) -> dict[int, list[str]]:
+    def _agent_loop(self, batch: dict[str, str]) -> dict[str, list[str]]:
         user_prompt = (
             "Split the following subtitle groups with <br> separators. "
             "Keep the original language and do not rewrite.\n"
@@ -140,34 +143,30 @@ class SubtitleSplitter:
             {"role": "user", "content": user_prompt},
         ]
 
-        last_result: dict[int, list[str]] | None = None
+        last_result: dict[str, list[str]] | None = None
         for step in range(MAX_STEPS):
             response = call_llm(messages=messages, model=self.model, temperature=0.2)
             response_id = get_response_id(response)
-            result_text = response.choices[0].message.content
-            if not result_text:
-                raise ValueError("LLM returned empty result")
+            result_text, error_message = extract_response_text(response)
+            parsed_parts: dict[str, list[str]] | None = None
 
-            try:
-                parsed_result = json_repair.loads(result_text)
-            except Exception as exc:
-                is_valid = False
-                error_message = f"JSON parse error: {exc}"
-            else:
-                is_valid, error_message = self._validate_json(parsed_result, batch)
-                if is_valid:
-                    parsed_parts = self._parse_split_result(parsed_result)
-                    last_result = parsed_parts
-                    is_valid, error_message = self._validate_split_result(
-                        batch, parsed_parts
-                    )
+            if result_text:
+                parsed_result, error_message = parse_json_dict(result_text)
+                if parsed_result is not None:
+                    is_valid, error_message = self._validate_json(parsed_result, batch)
                     if is_valid:
-                        return parsed_parts
+                        parsed_parts = self._parse_split_result(parsed_result)
+                        last_result = parsed_parts
+                        is_valid, error_message = self._validate_split_result(
+                            batch, parsed_parts
+                        )
+                        if is_valid:
+                            return parsed_parts
 
             output.warn(
                 f"分割验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
-            messages.append({"role": "assistant", "content": result_text})
+            messages.append({"role": "assistant", "content": result_text or ""})
             messages.append(
                 {
                     "role": "user",
@@ -182,7 +181,7 @@ class SubtitleSplitter:
         return (
             last_result
             if last_result
-            else {int(key): [text] for key, text in batch.items()}
+            else {key: [text] for key, text in batch.items()}
         )
 
     def _validate_json(
@@ -216,19 +215,19 @@ class SubtitleSplitter:
 
     def _parse_split_result(
         self, parsed_result: dict[str, str]
-    ) -> dict[int, list[str]]:
+    ) -> dict[str, list[str]]:
         return {
-            int(key): self._split_response_text(value)
+            key: self._split_response_text(value)
             for key, value in parsed_result.items()
         }
 
     def _validate_split_result(
         self,
         original_batch: dict[str, str],
-        split_chunk: dict[int, list[str]],
+        split_chunk: dict[str, list[str]],
     ) -> tuple[bool, str]:
         for key, original_text in original_batch.items():
-            parts = split_chunk.get(int(key))
+            parts = split_chunk.get(key)
             if not parts:
                 return (
                     False,

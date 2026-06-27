@@ -3,12 +3,16 @@
 import json
 from typing import Any
 
-import json_repair
 import openai
 
 from my_video.cli import output
 from my_video.core.asr.asr_data import SubtitleLine
-from my_video.core.llm import call_llm, get_response_id
+from my_video.core.llm import (
+    call_llm,
+    extract_response_text,
+    get_response_id,
+    parse_json_dict,
+)
 from my_video.core.prompts import get_prompt
 from my_video.core.translate.base import BaseTranslator
 from my_video.core.translate.types import TargetLanguage
@@ -95,15 +99,17 @@ class LLMTranslator(BaseTranslator):
         for step in range(self.MAX_STEPS):
             response = call_llm(messages=messages, model=self.model)
             response_id = get_response_id(response)
-            response_dict = json_repair.loads(
-                response.choices[0].message.content.strip()
-            )
-            last_response_dict = response_dict
-            is_valid, error_message = self._validate_llm_response(
-                response_dict, subtitle_dict
-            )
-            if is_valid:
-                return response_dict
+            result_text, error_message = extract_response_text(response)
+
+            if result_text:
+                response_dict, error_message = parse_json_dict(result_text)
+                if response_dict is not None:
+                    last_response_dict = response_dict
+                    is_valid, error_message = self._validate_llm_response(
+                        response_dict, subtitle_dict
+                    )
+                    if is_valid:
+                        return response_dict
 
             output.warn(
                 f"翻译验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
@@ -111,7 +117,7 @@ class LLMTranslator(BaseTranslator):
             messages.append(
                 {
                     "role": "assistant",
-                    "content": self._format_payload(response_dict),
+                    "content": result_text or "",
                 }
             )
             messages.append(
@@ -124,7 +130,8 @@ class LLMTranslator(BaseTranslator):
                 }
             )
 
-        return last_response_dict or {}
+        output.warn(f"Max attempts reached({self.MAX_STEPS})，returning last result")
+        return last_response_dict or subtitle_dict
 
     def _validate_llm_response(
         self, response_dict: Any, subtitle_dict: dict[str, str]

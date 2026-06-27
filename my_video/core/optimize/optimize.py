@@ -9,8 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-import json_repair
-
 from my_video.cli import output
 from my_video.core.utils.text_diff import (
     render_inline_diff,
@@ -24,7 +22,7 @@ from ..asr.asr_data import (
     SubtitleSentence,
     SubtitleSentences,
 )
-from ..llm import call_llm, get_response_id
+from ..llm import call_llm, extract_response_text, get_response_id, parse_json_dict
 from ..prompts import get_prompt
 from ..utils.helper import (
     split_tokens,
@@ -247,7 +245,7 @@ class SubtitleOptimizer:
             {"role": "user", "content": user_prompt},
         ]
 
-        last_result = None
+        last_result: dict[str, str] | None = None
 
         # Agent loop
         for step in range(MAX_STEPS):
@@ -258,34 +256,22 @@ class SubtitleOptimizer:
                 temperature=0.2,
             )
             response_id = get_response_id(response)
-
-            result_text = response.choices[0].message.content
-            if not result_text:
-                raise ValueError("LLM returned empty result")
-
-            # 解析结果
-            parsed_result = json_repair.loads(result_text)
-            if not isinstance(parsed_result, dict):
-                raise ValueError(
-                    f"LLM返回结果类型Error，期望dict，实际{type(parsed_result)}"
-                )
-
-            result_dict: dict[str, str] = parsed_result
-            last_result = result_dict
-
-            # 验证结果
-            is_valid, error_message = self._validate_optimization_result(
-                original_chunk=subtitle_chunk, optimized_chunk=result_dict
-            )
-
-            if is_valid:
-                return result_dict
+            result_text, error_message = extract_response_text(response)
+            if result_text:
+                result_dict, error_message = parse_json_dict(result_text)
+                if result_dict is not None:
+                    last_result = result_dict
+                    is_valid, error_message = self._validate_optimization_result(
+                        original_chunk=subtitle_chunk, optimized_chunk=result_dict
+                    )
+                    if is_valid:
+                        return result_dict
 
             # 验证失败，添加反馈
             output.warn(
                 f"优化验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
-            messages.append({"role": "assistant", "content": result_text})
+            messages.append({"role": "assistant", "content": result_text or ""})
             messages.append(
                 {
                     "role": "user",
@@ -362,7 +348,7 @@ class SubtitleOptimizer:
             error_msg = ";\n".join(excessive_changes)
             error_msg += (
                 "\n\nYour optimizations changed the text too much. "
-                "Keep high similarity (≥70% for normal text) by making MINIMAL changes: "
+                "Keep high similarity (≥60% for normal text) by making MINIMAL changes: "
                 "only fix recognition errors and improve clarity, "
                 "but preserve the original wording, length and structure as much as possible."
             )

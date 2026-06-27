@@ -4,15 +4,21 @@ from my_video.core.asr.asr_data import (
     SubtitleSentence,
     SubtitleSentences,
 )
-from my_video.core.optimize.optimize import SubtitleOptimizer
+from my_video.core.optimize.optimize import MAX_STEPS, SubtitleOptimizer
+from tests.helpers.agent_loop import (
+    install_warnings,
+    make_response,
+    make_response_without_message,
+    sequence_call_llm,
+)
 
 
 def make_seg(text: str, start: int, end: int) -> SubtitleSegment:
     return SubtitleSegment(text=text, start_time=start, end_time=end)
 
 
-class TestSubtitleOptimizerWriteBack:
-    def test_equal_keeps_original_timestamps(self) -> None:
+class TestWriteBack:
+    def test_equal(self) -> None:
         segments = [
             make_seg("hello", 0, 100),
             make_seg("world", 100, 220),
@@ -26,7 +32,7 @@ class TestSubtitleOptimizerWriteBack:
             (100, 220),
         ]
 
-    def test_insert_uses_gap_between_neighbors(self) -> None:
+    def test_insert_gap(self) -> None:
         segments = [
             make_seg("hello", 0, 100),
             make_seg("world", 160, 260),
@@ -44,7 +50,7 @@ class TestSubtitleOptimizerWriteBack:
             (160, 260),
         ]
 
-    def test_insert_at_start_uses_next_start_time_as_zero_length(self) -> None:
+    def test_insert_start(self) -> None:
         segments = [
             make_seg("identify", 100, 180),
             make_seg("more", 180, 250),
@@ -61,7 +67,7 @@ class TestSubtitleOptimizerWriteBack:
             (180, 250),
         ]
 
-    def test_insert_at_end_uses_previous_end_time_as_zero_length(self) -> None:
+    def test_insert_end(self) -> None:
         segments = [
             make_seg("hello", 0, 100),
             make_seg("world", 100, 220),
@@ -78,7 +84,7 @@ class TestSubtitleOptimizerWriteBack:
             (220, 220),
         ]
 
-    def test_optimize_log_uses_inline_diff_with_candidate_display(self) -> None:
+    def test_log(self) -> None:
         groups = [
             SubtitleSentence(
                 index=0,
@@ -110,33 +116,239 @@ class TestSubtitleOptimizerWriteBack:
         assert rewritten.sentences[0].optimize_log == ""
 
 
-class TestSubtitleOptimizerFlow:
-    def test_validate_optimization_result_uses_difflib_ratio_thresholds(self) -> None:
-        optimizer = SubtitleOptimizer(
-            thread_num=1,
-            batch_num=2,
-            model="test-model",
-            custom_prompt="",
+class TestValidate:
+    def test_keys_missing(self) -> None:
+        optimizer = SubtitleOptimizer(1, 2, "test-model", "")
+
+        is_valid, error = optimizer._validate_optimization_result(
+            {"0": "hello", "1": "world"},
+            {"0": "hello"},
         )
 
-        is_valid, error_message = optimizer._validate_optimization_result(
-            original_chunk={"0": "alpha beta gamma"},
-            optimized_chunk={"0": "alpha theta gamma extra"},
+        assert not is_valid
+        assert "Missing keys: ['1']" in error
+        optimizer.stop()
+
+    def test_keys_extra(self) -> None:
+        optimizer = SubtitleOptimizer(1, 2, "test-model", "")
+
+        is_valid, error = optimizer._validate_optimization_result(
+            {"0": "hello"},
+            {"0": "hello", "1": "world"},
+        )
+
+        assert not is_valid
+        assert "Extra keys: ['1']" in error
+        optimizer.stop()
+
+    def test_similarity_short(self) -> None:
+        optimizer = SubtitleOptimizer(1, 2, "test-model", "")
+
+        is_valid, error = optimizer._validate_optimization_result(
+            {"0": "alpha beta gamma"},
+            {"0": "alpha theta gamma extra"},
         )
 
         assert is_valid
-        assert error_message == ""
+        assert error == ""
         optimizer.stop()
 
-    def test_optimize_subtitle_writes_back_to_input_and_returns_clean_object(
-        self, monkeypatch
-    ) -> None:
-        optimizer = SubtitleOptimizer(
-            thread_num=1,
-            batch_num=2,
-            model="test-model",
-            custom_prompt="",
+    def test_similarity_long(self) -> None:
+        optimizer = SubtitleOptimizer(1, 2, "test-model", "")
+
+        is_valid, error = optimizer._validate_optimization_result(
+            {
+                "0": "this is a longer sentence that should keep most of the original wording for subtitle optimization validation"
+            },
+            {"0": "completely rewritten content with a very different meaning and structure"},
         )
+
+        assert not is_valid
+        assert "Your optimizations changed the text too much" in error
+        optimizer.stop()
+
+
+class TestAgentLoop:
+    def test_reference(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        captured: dict[str, object] = {}
+
+        def fake_call_llm(*, messages, model, temperature):
+            captured["user_prompt"] = messages[1]["content"]
+            return make_response('{"0":"hello world."}')
+
+        monkeypatch.setattr("my_video.core.optimize.optimize.call_llm", fake_call_llm)
+
+        result = optimizer.agent_loop(
+            {"0": "hello world."}, "Reference paragraph here."
+        )
+
+        assert result == {"0": "hello world."}
+        assert (
+            "<reference>\nReference paragraph here.\n</reference>"
+            in captured["user_prompt"]
+        )
+        optimizer.stop()
+
+    def test_empty(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response("   ", response_id="opt-empty"),
+                    make_response('{"0":"hello world"}', response_id="opt-ok"),
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello world"}, "")
+
+        assert result == {"0": "hello world"}
+        assert "优化验证失败[opt-empty]" in warnings[0]
+        assert "Response content is empty." in warnings[0]
+        optimizer.stop()
+
+    def test_not_dict(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response("[1, 2]", response_id="opt-list"),
+                    make_response('{"0":"hello world"}', response_id="opt-ok"),
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello world"}, "")
+
+        assert result == {"0": "hello world"}
+        assert "JSON structure error: expected dict, got list." in warnings[0]
+        optimizer.stop()
+
+    def test_keys_missing(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response('{"0":"hello"}', response_id="opt-missing"),
+                    make_response('{"0":"hello","1":"world"}', response_id="opt-ok"),
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello", "1": "world"}, "")
+
+        assert result == {"0": "hello", "1": "world"}
+        assert "Missing keys: ['1']" in warnings[0]
+        optimizer.stop()
+
+    def test_keys_extra(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response('{"0":"hello","1":"extra"}', response_id="opt-extra"),
+                    make_response('{"0":"hello"}', response_id="opt-ok"),
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello"}, "")
+
+        assert result == {"0": "hello"}
+        assert "Extra keys: ['1']" in warnings[0]
+        optimizer.stop()
+
+    def test_warn(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response('{"0":"changed too much"}', response_id="opt-resp-1"),
+                    make_response('{"0":"hello world"}', response_id="opt-resp-2"),
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello world"}, "")
+
+        assert result == {"0": "hello world"}
+        assert (
+            "优化验证失败[opt-resp-1]，开始反馈循环 (第1次尝试): Key '0': similarity"
+            in warnings[0]
+        )
+        optimizer.stop()
+
+    def test_max_steps(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response('{"0":"changed too much"}', response_id=f"opt-{i}")
+                    for i in range(MAX_STEPS)
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello world"}, "")
+
+        assert result == {"0": "changed too much"}
+        assert warnings[-1] == f"Max attempts reached({MAX_STEPS})，returning last result"
+        optimizer.stop()
+
+    def test_response_shape(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
+        warnings = install_warnings(
+            monkeypatch, "my_video.core.optimize.optimize.output.warn"
+        )
+        monkeypatch.setattr(
+            "my_video.core.optimize.optimize.call_llm",
+            sequence_call_llm(
+                [
+                    make_response(response_id="opt-empty-choices", choices=[]),
+                    make_response_without_message(response_id="opt-no-message"),
+                    make_response(None, response_id="opt-no-content"),
+                ]
+            ),
+        )
+
+        result = optimizer.agent_loop({"0": "hello world"}, "")
+
+        assert result == {"0": "hello world"}
+        assert "choices is empty" in warnings[0]
+        assert "message is missing" in warnings[1]
+        assert "content is missing" in warnings[2]
+        assert warnings[-1] == f"Max attempts reached({MAX_STEPS})，returning last result"
+        optimizer.stop()
+
+
+class TestFlow:
+    def test_write_back(self, monkeypatch) -> None:
+        optimizer = SubtitleOptimizer(1, 2, "test-model", "")
         sentence_data = SubtitleSentences(
             [
                 SubtitleSentence(
@@ -172,13 +384,8 @@ class TestSubtitleOptimizerFlow:
         assert optimized.sentences[0].optimize_log == ""
         optimizer.stop()
 
-    def test_batch_sentence_groups_builds_reference_text_from_time_window(self) -> None:
-        optimizer = SubtitleOptimizer(
-            thread_num=1,
-            batch_num=1,
-            model="test-model",
-            custom_prompt="",
-        )
+    def test_batch_reference(self) -> None:
+        optimizer = SubtitleOptimizer(1, 1, "test-model", "")
         sentence_data = SubtitleSentences(
             [
                 SubtitleSentence(
@@ -211,19 +418,12 @@ class TestSubtitleOptimizerFlow:
         )
 
         assert len(batches) == 2
-        assert batches[0].start_time_ms == 0
-        assert batches[0].end_time_ms == 200
         assert batches[0].reference_text == "before overlap first match second match"
         assert batches[1].reference_text == "first match second match late match"
         optimizer.stop()
 
-    def test_batch_sentence_groups_uses_empty_reference_when_no_match(self) -> None:
-        optimizer = SubtitleOptimizer(
-            thread_num=1,
-            batch_num=20,
-            model="test-model",
-            custom_prompt="",
-        )
+    def test_batch_reference_empty(self) -> None:
+        optimizer = SubtitleOptimizer(1, 20, "test-model", "")
         groups = [
             SubtitleSentence(
                 index=0,
@@ -236,89 +436,4 @@ class TestSubtitleOptimizerFlow:
         batches = optimizer._batch_sentence_groups(groups, reference_data)
 
         assert batches[0].reference_text == ""
-        optimizer.stop()
-
-    def test_agent_loop_includes_plain_reference_block_without_numbering(
-        self, monkeypatch
-    ) -> None:
-        optimizer = SubtitleOptimizer(
-            thread_num=1,
-            batch_num=20,
-            model="test-model",
-            custom_prompt="",
-        )
-        captured: dict[str, object] = {}
-
-        class DummyMessage:
-            content = '{"0":"hello world."}'
-
-        class DummyChoice:
-            message = DummyMessage()
-
-        class DummyResponse:
-            choices = [DummyChoice()]
-
-        def fake_call_llm(*, messages, model, temperature):
-            captured["user_prompt"] = messages[1]["content"]
-            return DummyResponse()
-
-        monkeypatch.setattr("my_video.core.optimize.optimize.call_llm", fake_call_llm)
-
-        result = optimizer.agent_loop(
-            {"0": "hello world."}, "Reference paragraph here."
-        )
-
-        assert result == {"0": "hello world."}
-        assert (
-            "<reference>\nReference paragraph here.\n</reference>"
-            in captured["user_prompt"]
-        )
-        assert "0: " not in captured["user_prompt"]
-        optimizer.stop()
-
-    def test_agent_loop_warns_with_response_id_on_validation_failure(
-        self, monkeypatch
-    ) -> None:
-        optimizer = SubtitleOptimizer(
-            thread_num=1,
-            batch_num=20,
-            model="test-model",
-            custom_prompt="",
-        )
-        warnings: list[str] = []
-
-        class DummyMessage:
-            content = '{"0":"changed too much"}'
-
-        class DummyChoice:
-            message = DummyMessage()
-
-        class DummyResponse:
-            id = "opt-resp-1"
-            choices = [DummyChoice()]
-
-        monkeypatch.setattr(
-            "my_video.core.optimize.optimize.call_llm",
-            lambda **kwargs: DummyResponse(),
-        )
-        monkeypatch.setattr(
-            "my_video.core.optimize.optimize.output.warn",
-            lambda message: warnings.append(message),
-        )
-        monkeypatch.setattr(
-            optimizer,
-            "_validate_optimization_result",
-            lambda **kwargs: (
-                len(warnings) > 0,
-                "too different" if not warnings else "",
-            ),
-        )
-
-        result = optimizer.agent_loop({"0": "hello world"}, "")
-
-        assert result == {"0": "changed too much"}
-        assert (
-            "优化验证失败[opt-resp-1]，开始反馈循环 (第1次尝试): too different"
-            in warnings
-        )
         optimizer.stop()

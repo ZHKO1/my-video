@@ -8,7 +8,7 @@ from typing import Any
 
 import json_repair
 
-from my_video.core.llm import call_llm
+from my_video.core.llm import call_llm, extract_response_text
 from my_video.core.prompts import get_prompt
 
 
@@ -52,9 +52,9 @@ def get_summary(txt_path: str | Path, model: str = "deepseek-v4-pro") -> dict[st
         model=model,
         temperature=0.2,
     )
-    content = response.choices[0].message.content
+    content, error_message = extract_response_text(response)
     if not content:
-        raise ValueError("Summary response is empty")
+        raise ValueError(f"Summary response is invalid: {error_message}")
 
     try:
         payload = json.loads(content)
