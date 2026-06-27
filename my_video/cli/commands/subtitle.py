@@ -60,7 +60,6 @@ def run(args: Namespace, config: dict) -> int:
         )
 
         sentence_data.to_txt(paths.optimized_txt)
-        _write_tmp_optimized_json(_repo_root(), sentence_data)
         # 优化的文本后可能有标点符号的改动，所以需要重新分句号
         sentence_data = new_sentence_data.to_asr_data().to_sentence_data()
 
@@ -111,53 +110,3 @@ def _load_origin_subtitle_data(paths):
 
     return SubtitleSegments.from_subtitle_file(str(subtitle_path))
 
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _write_tmp_optimized_json(root_path: Path, sentence_data) -> None:
-    export_path = root_path / "tmp.json"
-    payload = [
-        {
-            "txt": sentence.text,
-            "optimized_text": sentence.optimized_text,
-        }
-        for sentence in sentence_data.sentences
-    ]
-    export_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def _prompt_choice(
-    prompt: str, valid_choices: set[str], default: str | None = None
-) -> str:
-    if not sys.stdin.isatty():
-        raise RuntimeError(f"stdin is not interactive, cannot prompt: {prompt}")
-
-    while True:
-        print(prompt, file=sys.stderr, end=" ", flush=True)
-        answer = input().strip()
-        if not answer and default is not None:
-            return default
-        if answer in valid_choices:
-            return answer
-        output.warn(f"Invalid input: {answer or '<empty>'}")
-
-
-def _prompt_yes_no(prompt: str, default: bool | None = None) -> bool:
-    default_choice = None
-    if default is True:
-        default_choice = "Y"
-    elif default is False:
-        default_choice = "N"
-    return (
-        _prompt_choice(
-            prompt,
-            {"Y", "y", "N", "n"},
-            default=default_choice,
-        ).lower()
-        == "y"
-    )

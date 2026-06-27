@@ -1,80 +1,56 @@
-## 安装
+# my-video
 
-这个仓库使用 `uv` 管理 Python 环境与依赖。
+命令行视频字幕流水线：
 
-首次使用时，先确认这两件事：
+1. `download`：用 `yt-dlp` 下载视频、原始字幕、缩略图
+2. `transcribe`：抽音频，用 WhisperX 转写
+3. `subtitle`：按句分组，LLM 优化、拆行、翻译
+4. `synthesize`：把双语字幕烧录回视频
 
-- Python 版本是 `3.13.x`
-- 系统里已经安装 `ffmpeg`
-
-`pyproject.toml` 当前限制的是 `>=3.13,<3.14`，所以 `3.12` 或 `3.14` 都不行，见 [pyproject.toml](/home/zhko1/github/my-video/pyproject.toml#L4)。转写流程会直接调用本机 `ffmpeg` 命令，见 [audio_preprocess.py](/home/zhko1/github/my-video/my_video/core/asr/audio_preprocess.py#L10)。
-
-### 1. 创建虚拟环境
-
-如果本机还没有 `uv`，先安装 `uv`。
-
-然后在仓库根目录执行：
-
-```bash
-uv venv --python 3.13
-```
-
-### 2. 安装项目依赖
-
-安装默认依赖：
-
-```bash
-uv sync
-```
-
-如果你也要安装开发依赖：
-
-```bash
-uv sync --group dev
-```
-
-默认依赖当前包含（运行完整 CLI 流程所需）：
-
-- `audioop-lts`（Python 3.13 下给 `pydub` 提供 `audioop` 兼容层）
-- `numpy`
-- `opencv-python`
-- `openpyxl`
-- `pandas`
-- `pydub`
-- `rapidfuzz`
-- `tenacity`
-- `diskcache`
-- `openai`
-- `json-repair`
-- `torch`
-- `whisperx`
-- `demucs`（通过 direct reference 安装）
-- `yt-dlp`
-
-开发依赖当前包含：
-
-- `pytest`
-- `ruff`
-- `pre-commit`
-
-如果你只想跑测试，不跑完整 CLI，可以使用更轻的 `test` 依赖组（见下方「测试」部分）。
-
-### 3. 验证安装
-
-激活虚拟环境后检查 CLI 是否可用：
-
-```bash
-source .venv/bin/activate
-my-video --help
-```
-
-如果你不想手动激活，也可以直接用：
+当前 CLI 实际可用命令：
 
 ```bash
 uv run my-video --help
 ```
 
-## 开发与测试
+## 环境要求
+
+- Python `3.13.x`
+- 本机已安装 `ffmpeg`
+- 能运行 WhisperX / PyTorch
+- 已设置 LLM 环境变量：
+  - `MY_VIDEO_OPENAI_BASE_URL`
+  - `MY_VIDEO_OPENAI_API_KEY`
+
+`pyproject.toml` 当前限制为 `>=3.13,<3.14`。
+
+## 安装
+
+这个仓库使用 `uv` 管理环境和依赖。
+
+### 创建虚拟环境
+
+```bash
+uv venv --python 3.13
+```
+
+### 安装默认依赖
+
+```bash
+uv sync
+```
+
+默认依赖已经包含完整流水线所需的主要包，包括：
+
+- `openai`
+- `json-repair`
+- `diskcache`
+- `torch`
+- `whisperx`
+- `demucs`
+- `yt-dlp`
+- `opencv-python`
+- `pydub`
 
 ### 安装开发依赖
 
@@ -82,126 +58,24 @@ uv run my-video --help
 uv sync --group dev
 ```
 
-### 代码检查与格式化
-
-项目使用 [Ruff](https://docs.astral.sh/ruff/) 统一处理 lint 和 format。
+### 验证 CLI
 
 ```bash
-# 检查并自动修复问题
-uv run ruff check --fix .
-
-# 格式化代码
-uv run ruff format .
+uv run my-video --help
 ```
 
-### 安装 Git 钩子（pre-commit）
+## 配置
 
-commit 前自动跑 Ruff 检查和格式化：
+程序只读取当前工作目录下的 `my_video.toml`。
 
-```bash
-uv run pre-commit install
-```
-
-配置里用的是 `repo: local`，会直接调用项目环境里已经装好的 ruff（通过 `uv run ruff ...`），**不需要再联网下载**额外版本的 ruff。
-
-安装后，每次 `git commit` 会先对变更的 Python 文件执行：
-
-```bash
-uv run ruff check --fix <staged-files>
-uv run ruff format <staged-files>
-```
-
-如果 Ruff 自动修复了文件，这次 commit 会被中止，你需要重新 `git add` 并再次 commit。
-
-### 运行测试
-
-**轻量模式**（推荐日常开发，不安装 torch / whisperx / demucs / yt-dlp / opencv 等重型依赖）：
-
-```bash
-uv run --no-default-groups --group test pytest
-```
-
-**完整模式**（和之前一样，使用全部项目依赖）：
-
-```bash
-uv run pytest
-```
-
-当前测试集中不包含需要 whisperx / torch / demucs / yt-dlp 的用例，所以轻量模式即可跑完全部测试。
-
-### CI
-
-仓库已配置 GitHub Actions（`.github/workflows/ci.yml`），在 push / pull_request 时自动执行：
-
-```bash
-uv run --no-default-groups --group dev ruff check .
-uv run --no-default-groups --group dev ruff format --check .
-uv run --no-default-groups --group test pytest
-```
-
-CI 同样使用轻量依赖组，避免安装重型依赖。
-
-## 可选：安装 demucs
-
-`demucs` 不是默认依赖。原因是它的依赖声明会和 `whisperx` 使用的 `torchaudio` 版本冲突，所以这里单独提供了一个安装脚本。
-
-如果当前环境里已经装好了 `whisperx`、`torch` 和 `torchaudio`，可以执行：
-
-```bash
-bash scripts/install_demucs_uv.sh --python .venv/bin/python
-```
-
-如果你当前已经激活了目标虚拟环境，也可以直接执行：
-
-```bash
-bash scripts/install_demucs_uv.sh
-```
-
-这个脚本会：
-
-- 先确认目标环境里已经有 `whisperx`
-- 记录安装前的 `torch` / `torchaudio` 版本
-- 用 `uv pip install --no-deps` 安装 `demucs`
-- 再补装 `dora-search`、`openunmix`、`lameenc`
-- 最后检查 `torch` / `torchaudio` 没有被改动
-
-这个流程只解决 `demucs` 与 `torchaudio` 的依赖冲突
-
-## download 配置
-
-`my_video` 会读取全局工作目录与 yt-dlp 运行参数：
-
-1. 读取当前目录下默认文件 `my_video.toml`。
-2. 文件不存在时会忽略并继续下载。
-
-- `work_dir`：全局工作目录，可选，支持 `~`
-- `download.cookie_path`：cookie 文件路径，可选
-- `download.proxy`：代理地址，可选
+最小示例：
 
 ```toml
 work_dir = "~/work/my-video"
 
 [download]
 cookie_path = "./cookies.txt"
-proxy = "socks5://192.168.71.5:20170/"
-```
-
-`work_dir` 为统一工作目录，所有产物都写入该目录。
-
-## transcribe 配置
-
-`my_video transcribe` 也读取当前目录下的 `my_video.toml`。
-
-- `work_dir`：全局工作目录，支持 `~`
-- `[transcribe].demucs`：是否启用 Demucs 人声分离，默认 `true`
-- `[transcribe.whisperx].language`：WhisperX 语言，默认 `"en"`
-- `[transcribe.whisperx].model`：WhisperX 模型名，默认 `"large-v3-turbo"`
-- `[transcribe.whisperx].model_dir`：本地模型目录，可留空
-
-示例：
-
-```toml
-work_dir = "~/work/my-video"
+proxy = "socks5://127.0.0.1:7890"
 
 [transcribe]
 demucs = true
@@ -210,231 +84,258 @@ demucs = true
 language = "en"
 model = "large-v3-turbo"
 model_dir = ""
-```
-
-## download 行为
-
-`my_video download <url>` 的执行流程：
-
-1. 通过 yt-dlp 获取视频元信息（标题、ID 等），写入 `<workspace>/info.json`。
-2. 基于视频标题创建 workspace 目录：`<work_dir>/<SanitizedTitle>/`。
-3. 一次性下载视频、字幕、缩略图到 `<workspace>/origin/`：
-   - **视频**：最大 1080p，格式 `(bestvideo[height<=1080]+bestaudio/best[height<=1080])`，输出为 `video.<ext>`
-   - **字幕**：仅英文字幕（`en.*`），自动字幕不下载（`writeautomaticsub: False`），输出为 `subtitle.<ext>`
-   - **缩略图**：输出为 `thumb.jpg`
-4. 下载结果写入 `<workspace>/status.json`。
-
-规则：
-
-- 视频下载失败：命令直接失败
-- 字幕或缩略图未找到：打印 info 提示，不影响整体成功
-- 不支持播放列表（`noplaylist: True`）
-
-## transcribe 用法
-
-命令格式：
-
-```bash
-uv run my-video transcribe <workspace-path>
-```
-
-示例：
-
-```bash
-uv run my-video transcribe ~/work/my-video/SomeVideoTitle
-```
-
-参数说明：
-
-- `<workspace-path>`：工作区目录路径。该目录必须存在，且包含 `status.json`（其中记录 `origin.video_path`）。通常由 `download` 命令生成。
-
-执行流程：
-
-1. 检查 workspace 目录是否存在。
-2. 从 `<workspace>/status.json` 读取原始视频路径 `origin.video_path`。
-3. 如果 `transcribe/whisperx.json` 已存在，直接返回成功（幂等）。
-4. 用 `ffmpeg` 提取音频到 `transcribe/raw.mp3`。
-5. 如果 `[transcribe].demucs = true`，先做 Demucs 人声分离，输出到 `transcribe/vocal.mp3`，并用人声轨做转写。
-6. 用本地 WhisperX 转写音频，输出 JSON 结果到 `transcribe/whisperx.json`。
-7. 扫描转写结果中的 hallucination，若发现则打印警告。
-8. 从 WhisperX 结果生成 `transcribe/whisperx.srt`。
-
-当前实现的主要输出路径（相对于 `<workspace-path>`）：
-
-- `transcribe/whisperx.srt`：WhisperX 生成的字幕文件
-- `transcribe/whisperx.json`：WhisperX 原始转写结果
-- `transcribe/raw.mp3`：抽取后的原始音频
-- `transcribe/vocal.mp3`：Demucs 人声轨（仅在 `demucs = true` 时生成）
-
-注意：
-
-- `transcribe` 接收的是 **workspace 目录**，不是视频文件本身。通常先执行 `download` 生成 workspace，再对其执行 `transcribe`。
-- `demucs` 不是默认依赖；只有在 `[transcribe].demucs = true` 时才需要额外安装。
-- 第一次加载 WhisperX / pyannote 模型时可能会下载模型文件。
-- 当前实现不会生成词级 Excel 中间结果（该逻辑已注释掉）。
-
-## subtitle 配置
-
-`my_video subtitle` 读取当前目录下的 `my_video.toml`。
-
-- `work_dir`：全局工作目录，支持 `~`
-- `[subtitle.thread_num]`：处理线程数，默认 `4`
-- `[subtitle.batch_size]`：LLM 请求批次大小，默认 `20`
-- `[subtitle.need_reflect]`：是否启用反思翻译，默认 `true`
-- `[subtitle.max_sentence_word_count_english]`：英文句子最大词数，默认 `50`
-- `[subtitle.max_sentence_word_count_cjk]`：CJK 句子最大字符数，默认 `50`
-- `[subtitle.max_word_count_cjk]`：单行 CJK 最大字符数，默认 `16`
-- `[subtitle.max_word_count_english]`：单行英文最大词数，默认 `18`
-- `[llm.model]`：LLM 模型名，默认 `"deepseek-v4-pro"`
-
-示例：
-
-```toml
-work_dir = "~/work/my-video"
 
 [subtitle]
 thread_num = 4
 batch_size = 20
 need_reflect = true
-max_sentence_word_count_english = 50
-max_sentence_word_count_cjk = 50
 max_word_count_cjk = 16
 max_word_count_english = 18
 
 [llm]
 model = "deepseek-v4-pro"
-```
-
-## subtitle 用法
-
-命令格式：
-
-```bash
-uv run my-video subtitle <workspace-path>
-```
-
-示例：
-
-```bash
-uv run my-video subtitle ~/work/my-video/SomeVideoTitle
-```
-
-参数说明：
-
-- `<workspace-path>`：工作区目录路径。该目录必须存在，且包含 `transcribe/whisperx.json`（WhisperX 转写结果）。
-
-执行流程：
-
-1. 检查 workspace 目录是否存在。
-2. 从 `transcribe/whisperx.json` 加载词级转写数据。
-3. 加载原始字幕（如有）：若 download 阶段获取了原始字幕，会作为参考文本供优化阶段使用。
-4. 句子分组：将词级片段按句末标点（`.`, `!`, `?`, `。`, `！`, `？`）合并为句子级分组。
-5. LLM 优化：修正识别错误、删除语气词、校正标点，使用 `optimize/subtitle` prompt，支持最多 3 次重试的 agent 循环。
-6. LLM 拆分：将过长句子拆分为多行字幕，使用 `split/structured` prompt，验证内容相似度和词数限制。
-7. LLM 翻译：将每行字幕翻译为目标语言（默认简体中文），使用 `translate/standard` 或 `translate/reflect` prompt，支持缓存。
-8. 写入 SRT 输出。
-
-当前实现的主要输出路径（相对于 `<workspace-path>`）：
-
-- `subtitle/src.srt`：原始语言字幕（SRT 格式）
-- `subtitle/trans.srt`：翻译后的字幕（SRT 格式）
-- `subtitle/optimized.txt`：优化过程的文本日志
-
-## synthesize 配置
-
-`my_video synthesize` 读取当前目录下的 `my_video.toml`。
-
-- `work_dir`：全局工作目录，支持 `~`
-- `[synthesize.ffmpeg_gpu]`：是否使用 GPU 编码（h264_nvenc），默认 `false`
-
-示例：
-
-```toml
-work_dir = "~/work/my-video"
 
 [synthesize]
 ffmpeg_gpu = false
 ```
 
-## synthesize 用法
+当前代码实际读取的配置项如下。
 
-命令格式：
+### 全局
+
+- `work_dir`：workspace 根目录，默认当前目录
+
+### download
+
+- `download.cookie_path`
+- `download.proxy`
+
+### transcribe
+
+- `transcribe.demucs`：是否做人声分离，默认 `true`
+- `transcribe.whisperx.language`：默认 `"en"`，也可设为 `"auto"`
+- `transcribe.whisperx.model`：默认 `"large-v3-turbo"`
+- `transcribe.whisperx.model_dir`：本地模型目录，可空
+
+### subtitle
+
+- `subtitle.thread_num`：默认 `4`
+- `subtitle.batch_size`：默认 `20`
+- `subtitle.need_reflect`：默认 `true`
+- `subtitle.max_word_count_cjk`：默认 `16`
+- `subtitle.max_word_count_english`：默认 `18`
+- `llm.model`：默认 `"deepseek-v4-pro"`
+
+说明：
+
+- 当前翻译目标语言在代码里固定为 `简体中文`
+- LLM 调用使用环境变量，不从 `my_video.toml` 读取 key/base_url
+
+### synthesize
+
+- `synthesize.ffmpeg_gpu`：默认 `false`
+
+## 命令用法
+
+### 1. download
+
+```bash
+uv run my-video download <url>
+```
+
+行为：
+
+- 先抓取视频信息并写入 `info.json`
+- 按视频标题创建 workspace
+- 下载视频到 `origin/video.*`
+- 下载英文字幕到 `origin/subtitle.srt`
+- 下载缩略图到 `origin/thumb.jpg`
+- 写入和更新 `status.json`
+
+当前下载实现的关键点：
+
+- `noplaylist = True`
+- 视频格式优先限制在 `1080p`
+- `writesubtitles = True`
+- `writeautomaticsub = True`
+- `subtitleslangs = ["en.*"]`
+- 字幕会通过 yt-dlp postprocessor 转成 `srt`
+
+### 2. transcribe
+
+```bash
+uv run my-video transcribe <workspace-path>
+```
+
+输入要求：
+
+- workspace 必须已存在
+- `status.json` 里必须有 `origin.video_path`
+
+执行流程：
+
+1. 抽取音频到 `transcribe/raw.mp3`
+2. 如果 `transcribe.demucs = true`，做人声分离，输出 `transcribe/vocal.mp3`
+3. 用 WhisperX 转写到 `transcribe/whisperx.json`
+4. 扫描 hallucination 并打印告警
+5. 导出 `transcribe/whisperx.srt`
+
+补充说明：
+
+- 如果 `transcribe/whisperx.json` 已存在，命令会直接成功返回
+- WhisperX 会自动选择 `cuda` 或 `cpu`
+- 代码会先探测 HuggingFace 官方站和镜像站，选择响应更快的下载端点
+
+### 3. subtitle
+
+```bash
+uv run my-video subtitle <workspace-path>
+```
+
+输入要求：
+
+- workspace 必须已存在
+- `transcribe/whisperx.json` 必须存在
+
+执行流程：
+
+1. 从 WhisperX 词级结果构造 `SubtitleSegments`
+2. 按句末标点组装成 `SubtitleSentence`
+3. 如果 workspace 里有原始字幕，作为优化阶段参考文本
+4. LLM 优化句子内容
+5. 基于优化后的结果重新分句
+6. LLM 拆成字幕行
+7. LLM 翻译为简体中文
+8. 产出双语 SRT
+
+当前产物：
+
+- `subtitle/origin.txt`：原始句子文本
+- `subtitle/optimized.txt`：优化后的句子文本/优化日志
+- `subtitle/split.txt`：拆行后的文本视图
+- `subtitle/src.srt`：源语言字幕
+- `subtitle/trans.srt`：中文字幕
+
+补充说明：
+
+- `SubtitleLine` 当前索引语义是：
+  - `sentence_index`：对应 `SubtitleSentence.index`
+  - `sentence_splited_line_index`：同一句拆分后的行号，从 `0` 开始
+  - `line_index`：全局行号，从 `0` 开始
+- 翻译缓存和回填现在都基于 `line_index`
+- 命令还会在仓库根目录写一个调试文件 `tmp.json`
+
+### 4. synthesize
 
 ```bash
 uv run my-video synthesize <workspace-path>
 ```
 
-示例：
+输入要求：
 
-```bash
-uv run my-video synthesize ~/work/my-video/SomeVideoTitle
-```
-
-参数说明：
-
-- `<workspace-path>`：工作区目录路径。该目录必须存在，且包含 `status.json`（其中记录原始视频路径）和 `subtitle/` 目录。
+- workspace 必须已存在
+- `status.json` 里必须有 `origin.video_path`
+- `subtitle/src.srt` 和 `subtitle/trans.srt` 必须存在
 
 执行流程：
 
-1. 检查 workspace 目录是否存在。
-2. 从 `status.json` 读取原始视频路径。
-3. 读取 `subtitle/src.srt`（源字幕）和 `subtitle/trans.srt`（翻译字幕）。
-4. 使用 FFmpeg 的 `subtitles` 滤镜将双字幕烧录到视频中：
-   - 源字幕：白色文字，13px 字体，黑色描边，带阴影（默认底部位置）
-   - 翻译字幕：青色文字，15px 字体，黑色描边，半透明背景，底部居中，底部边距 23px
-5. 若启用 GPU 编码，使用 `h264_nvenc` 硬件加速。
-6. 生成 `output.md` 记录视频元信息。
+1. 读取原视频分辨率
+2. 用 FFmpeg `subtitles` 滤镜依次叠加源字幕和译文字幕
+3. 需要时启用 `h264_nvenc`
+4. 生成 `output.mp4`
+5. 根据 `info.json` 生成 `output.md`
 
-当前实现的主要输出路径（相对于 `<workspace-path>`）：
+当前样式规则：
 
-- `output.mp4`：烧录双字幕的最终视频
-- `output.md`：视频元信息摘要
+- 字体文件：`my_video/assets/SourceHanSansSC-Regular.otf`
+- 源字幕：白字、黑描边、阴影
+- 译文字幕：青色、黑描边、半透明背景
 
 ## 完整流程
 
-典型的视频处理流程为：
-
 ```bash
-# 1. 下载视频
 uv run my-video download <url>
-
-# 2. 语音转写
 uv run my-video transcribe ~/work/my-video/<VideoTitle>
-
-# 3. 字幕优化、拆分、翻译
 uv run my-video subtitle ~/work/my-video/<VideoTitle>
-
-# 4. 烧录字幕到视频
 uv run my-video synthesize ~/work/my-video/<VideoTitle>
 ```
 
-所有输出文件均位于 `<work_dir>/<VideoTitle>/` 目录下，结构如下：
+## Workspace 结构
 
-```
+典型目录结构如下：
+
+```text
 <workspace>/
-  info.json                  -- 视频元信息
-  status.json                -- 流程状态追踪
+  info.json
+  status.json
+  origin/
+    video.<ext>
+    subtitle.srt
+    thumb.jpg
   transcribe/
-    raw.mp3                  -- 提取的原始音频
-    vocal.mp3                -- Demucs 人声轨（可选）
-    whisperx.json            -- WhisperX 词级转写结果
-    whisperx.srt             -- WhisperX 原始字幕
+    raw.mp3
+    vocal.mp3
+    whisperx.json
+    whisperx.srt
   subtitle/
-    src.srt                  -- 优化后的源语言字幕
-    trans.srt                -- 翻译后的字幕
-    optimized.txt            -- 优化日志
-  origin/                    -- 下载的原始素材
-  output.mp4                 -- 最终带字幕视频
-  output.md                  -- 视频元信息
+    origin.txt
+    optimized.txt
+    split.txt
+    src.srt
+    trans.srt
+  output.mp4
+  output.md
 ```
 
+`status.json` 会记录：
 
+- `stage`
+- `status`
+- `failed_reason`
+- `origin.video_path`
+- `origin.subtitle_path`
+- `origin.thumbnail_path`
+- `last_time`
 
+## 开发
 
+### Ruff
 
-# TODOLIST
-1. my_video/core/asr/asr_data.py
-全面测试一遍
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+```
 
-build_sentence_groups 根据不同的标点符号测试一圈
-根据srt以及vtt的测试
+### pre-commit
+
+```bash
+uv run pre-commit install
+```
+
+### 测试
+
+轻量测试：
+
+```bash
+uv run --no-default-groups --group test pytest
+```
+
+完整测试：
+
+```bash
+uv run pytest
+```
+
+### CI
+
+仓库当前有一个 GitHub Actions 工作流：
+
+- `.github/workflows/ci.yml`
+
+它会执行：
+
+```bash
+uv run --no-default-groups --group dev ruff check .
+uv run --no-default-groups --group dev ruff format --check .
+uv run --no-default-groups --group test pytest
+```
