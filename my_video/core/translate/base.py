@@ -81,7 +81,7 @@ class BaseTranslator(ABC):
         """生成缓存键"""
         class_name = self.__class__.__name__
         chunk_key = generate_cache_key(
-            [{"key": line.line_id, "text": line.text} for line in chunk]
+            [{"key": line.line_index, "text": line.text} for line in chunk]
         )
         lang = self.target_language.value
         return f"{class_name}:{chunk_key}:{lang}"
@@ -122,24 +122,26 @@ class BaseTranslator(ABC):
         translated_chunk: list[SubtitleLine],
     ) -> None:
         translated_map = {
-            line.line_id: line.translate_text for line in translated_chunk
+            line.line_index: line.translate_text for line in translated_chunk
         }
         for line in target_chunk:
-            line.translate_text = translated_map.get(line.line_id, line.translate_text)
+            line.translate_text = translated_map.get(
+                line.line_index, line.translate_text
+            )
 
     @staticmethod
     def _batch_subtitle_lines(lines: list[SubtitleLine]) -> list[list[SubtitleLine]]:
         grouped: list[list[SubtitleLine]] = []
-        current_group_index: int | None = None
+        current_sentence_index: int | None = None
         current_group: list[SubtitleLine] = []
 
         for line in lines:
-            if current_group_index is None:
-                current_group_index = line.group_index
-            if line.group_index != current_group_index:
+            if current_sentence_index is None:
+                current_sentence_index = line.sentence_index
+            if line.sentence_index != current_sentence_index:
                 grouped.append(current_group)
                 current_group = []
-                current_group_index = line.group_index
+                current_sentence_index = line.sentence_index
             current_group.append(line)
 
         if current_group:
@@ -151,20 +153,20 @@ class BaseTranslator(ABC):
         seen_groups: set[int] = set()
 
         for group_lines in grouped:
-            group_index = group_lines[0].group_index
+            sentence_index = group_lines[0].sentence_index
             if (
                 current_batch
                 and current_group_count >= 20
-                and group_index not in seen_groups
+                and sentence_index not in seen_groups
             ):
                 batches.append(current_batch)
                 current_batch = []
                 current_group_count = 0
                 seen_groups = set()
 
-            if group_index not in seen_groups:
+            if sentence_index not in seen_groups:
                 current_group_count += 1
-                seen_groups.add(group_index)
+                seen_groups.add(sentence_index)
             current_batch.extend(group_lines)
 
         if current_batch:

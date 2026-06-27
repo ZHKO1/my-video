@@ -56,16 +56,13 @@ def build_sentence_list(segments: list["SubtitleSegment"]) -> list[SubtitleSente
 
 @dataclass
 class SubtitleLine:
-    group_index: int
+    sentence_index: int
+    sentence_splited_line_index: int
     line_index: int
     text: str
     translate_text: str = ""
     start_time: int = 0
     end_time: int = 0
-
-    @property
-    def line_id(self) -> str:
-        return f"{self.group_index}:{self.line_index}"
 
 
 class SubtitleLines:
@@ -74,27 +71,27 @@ class SubtitleLines:
 
     def to_txt(self, save_path: str | Path | None = None) -> str:
         output_lines: list[str] = []
-        current_group_index: int | None = None
+        current_sentence_index: int | None = None
         current_group: list[SubtitleLine] = []
 
         def flush_group() -> None:
             if not current_group:
                 return
-            group_index = current_group[0].group_index
+            sentence_index = current_group[0].sentence_index
             if len(current_group) == 1:
-                output_lines.append(f"{group_index}. {current_group[0].text}")
+                output_lines.append(f"{sentence_index}. {current_group[0].text}")
             else:
-                output_lines.append(f"{group_index}. ")
+                output_lines.append(f"{sentence_index}. ")
                 for line in current_group:
                     output_lines.append(f"【{count_words(line.text)}】{line.text}")
 
         for line in self.lines:
-            if current_group_index is None:
-                current_group_index = line.group_index
-            if line.group_index != current_group_index:
+            if current_sentence_index is None:
+                current_sentence_index = line.sentence_index
+            if line.sentence_index != current_sentence_index:
                 flush_group()
                 current_group = []
-                current_group_index = line.group_index
+                current_sentence_index = line.sentence_index
             current_group.append(line)
 
         flush_group()

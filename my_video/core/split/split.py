@@ -65,9 +65,16 @@ class SubtitleSplitter:
         split_results = self._parallel_split(batches)
 
         subtitle_lines: list[SubtitleLine] = []
+        next_line_index = 0
         for group in sentence_groups:
             parts = split_results.get(group.index, [group.text])
-            subtitle_lines.extend(self._build_subtitle_lines(group, parts))
+            group_lines = self._build_subtitle_lines(
+                group,
+                parts,
+                next_line_index=next_line_index,
+            )
+            subtitle_lines.extend(group_lines)
+            next_line_index += len(group_lines)
         return SubtitleLines(subtitle_lines)
 
     def _batch_requests(self, requests: list[SplitRequest]) -> list[dict[str, str]]:
@@ -251,7 +258,10 @@ class SubtitleSplitter:
         return True, ""
 
     def _build_subtitle_lines(
-        self, group: SubtitleSentence, parts: list[str]
+        self,
+        group: SubtitleSentence,
+        parts: list[str],
+        next_line_index: int,
     ) -> list[SubtitleLine]:
         try:
             segment_ranges = self._match_parts_to_segments(group.segments, parts)
@@ -263,14 +273,15 @@ class SubtitleSplitter:
             parts = [group.text]
 
         lines: list[SubtitleLine] = []
-        for line_index, ((start_idx, end_idx), text) in enumerate(
+        for sentence_splited_line_index, ((start_idx, end_idx), text) in enumerate(
             zip(segment_ranges, parts, strict=True)
         ):
             segs = group.segments[start_idx : end_idx + 1]
             lines.append(
                 SubtitleLine(
-                    group_index=group.index,
-                    line_index=line_index,
+                    sentence_index=group.index,
+                    sentence_splited_line_index=sentence_splited_line_index,
+                    line_index=next_line_index + sentence_splited_line_index,
                     text=text,
                     start_time=segs[0].start_time,
                     end_time=segs[-1].end_time,

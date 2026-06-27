@@ -93,7 +93,7 @@ def download(request: DownloadRequest) -> DownloadResult:
             "format": "(bestvideo[height<=1080]+bestaudio/best[height<=1080])",
             "writethumbnail": True,
             "writesubtitles": True,
-            "writeautomaticsub": False,
+            "writeautomaticsub": True,
             "subtitleslangs": ["en.*"],
             "outtmpl": {
                 "default": str(origin_path / "video.%(ext)s"),

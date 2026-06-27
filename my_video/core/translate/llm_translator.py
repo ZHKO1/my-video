@@ -8,7 +8,7 @@ import openai
 
 from my_video.cli import output
 from my_video.core.asr.asr_data import SubtitleLine
-from my_video.core.llm import call_llm
+from my_video.core.llm import call_llm, get_response_id
 from my_video.core.prompts import get_prompt
 from my_video.core.translate.base import BaseTranslator
 from my_video.core.translate.types import TargetLanguage
@@ -46,17 +46,19 @@ class LLMTranslator(BaseTranslator):
         self, subtitle_chunk: list[SubtitleLine]
     ) -> list[SubtitleLine]:
         output.info(
-            f"[+]正在翻译字幕: {subtitle_chunk[0].group_index} - {subtitle_chunk[-1].group_index}"
+            f"[+]正在翻译字幕: {subtitle_chunk[0].sentence_index} - {subtitle_chunk[-1].sentence_index}"
         )
 
-        subtitle_dict = {line.line_id: line.text for line in subtitle_chunk}
+        subtitle_dict = {str(line.line_index): line.text for line in subtitle_chunk}
         _, prompt = self._get_translate_prompt_info()
 
         try:
             result_dict = self._agent_loop(prompt, subtitle_dict)
             processed_result = self._normalize_result(result_dict)
             for line in subtitle_chunk:
-                line.translate_text = processed_result.get(line.line_id, line.text)
+                line.translate_text = processed_result.get(
+                    str(line.line_index), line.text
+                )
             return subtitle_chunk
         except openai.RateLimitError as e:
             output.error(f"OpenAI Rate Limit Error: {e!s}")
@@ -90,8 +92,9 @@ class LLMTranslator(BaseTranslator):
         ]
         last_response_dict: dict[str, Any] | None = None
 
-        for _ in range(self.MAX_STEPS):
+        for step in range(self.MAX_STEPS):
             response = call_llm(messages=messages, model=self.model)
+            response_id = get_response_id(response)
             response_dict = json_repair.loads(
                 response.choices[0].message.content.strip()
             )
@@ -102,6 +105,9 @@ class LLMTranslator(BaseTranslator):
             if is_valid:
                 return response_dict
 
+            output.warn(
+                f"翻译验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
+            )
             messages.append(
                 {
                     "role": "assistant",
@@ -126,7 +132,7 @@ class LLMTranslator(BaseTranslator):
         if not isinstance(response_dict, dict):
             return (
                 False,
-                f"Output must be a dict, got {type(response_dict).__name__}. Use format: {{'0:0': 'text', '0:1': 'text'}}",
+                f"Output must be a dict, got {type(response_dict).__name__}. Use format: {{'0': 'text', '1': 'text'}}",
             )
 
         expected_keys = set(subtitle_dict.keys())
@@ -160,7 +166,7 @@ class LLMTranslator(BaseTranslator):
     def _get_cache_key(self, chunk: list[SubtitleLine]) -> str:
         class_name = self.__class__.__name__
         chunk_key = generate_cache_key(
-            [{"key": line.line_id, "text": line.text} for line in chunk]
+            [{"key": line.line_index, "text": line.text} for line in chunk]
         )
         lang = self.target_language.value
         model = self.model
