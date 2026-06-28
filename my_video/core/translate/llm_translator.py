@@ -50,7 +50,7 @@ class LLMTranslator(BaseTranslator):
         self, subtitle_chunk: list[SubtitleLine]
     ) -> list[SubtitleLine]:
         output.info(
-            f"[+]正在翻译字幕: {subtitle_chunk[0].sentence_index} - {subtitle_chunk[-1].sentence_index}"
+            f"[+]translatting subtitles: {subtitle_chunk[0].sentence_index} - {subtitle_chunk[-1].sentence_index}"
         )
 
         subtitle_dict = {str(line.line_index): line.text for line in subtitle_chunk}
