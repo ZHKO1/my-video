@@ -78,6 +78,7 @@ Based on your analysis, rewrite the translation to sound completely natural in $
 - Avoid word-for-word translation and source language structure
 - Don't translate idioms literally
 - Both the first and second halves of a subtitle must have their own translation. Do not merge the second half's translation into the first half, leaving the second half empty. You may flexibly split the Chinese translation as needed, without strictly following the source line breaks. Under no circumstances should the second half contain a note like "(merged into the first half)".
+- Ensure that subtitle numbers and their corresponding content are correctly aligned; do not delete, omit, or misalign any entries.
 
 **Sound native:**
 
