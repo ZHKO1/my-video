@@ -4,8 +4,6 @@ import json
 import logging
 from typing import Any
 
-import openai
-
 from my_video.core.asr.asr_data import SubtitleLine
 from my_video.core.llm import (
     call_llm,
@@ -51,33 +49,20 @@ class LLMTranslator(BaseTranslator):
     def _translate_chunk(
         self, subtitle_chunk: list[SubtitleLine]
     ) -> list[SubtitleLine]:
-        logger.info(
-            f"[+]translatting subtitles: {subtitle_chunk[0].sentence_index} - {subtitle_chunk[-1].sentence_index}"
+        logger.debug(
+            "Translating subtitles: %s - %s",
+            subtitle_chunk[0].sentence_index,
+            subtitle_chunk[-1].sentence_index,
         )
 
         subtitle_dict = {str(line.line_index): line.text for line in subtitle_chunk}
         _, prompt = self._get_translate_prompt_info()
 
-        try:
-            result_dict = self._agent_loop(prompt, subtitle_dict)
-            processed_result = self._normalize_result(result_dict)
-            for line in subtitle_chunk:
-                line.translate_text = processed_result.get(
-                    str(line.line_index), line.text
-                )
-            return subtitle_chunk
-        except openai.RateLimitError as e:
-            logger.error(f"OpenAI Rate Limit Error: {e!s}")
-            raise
-        except openai.AuthenticationError as e:
-            logger.error(f"OpenAI Authentication Error: {e!s}")
-            raise
-        except openai.NotFoundError as e:
-            logger.error(f"OpenAI NotFound Error: {e!s}")
-            raise
-        except Exception as e:
-            logger.error(f"LLM translation error: {e}")
-            raise
+        result_dict = self._agent_loop(prompt, subtitle_dict)
+        processed_result = self._normalize_result(result_dict)
+        for line in subtitle_chunk:
+            line.translate_text = processed_result.get(str(line.line_index), line.text)
+        return subtitle_chunk
 
     def _normalize_result(self, result_dict: dict[str, Any]) -> dict[str, str]:
         if self.is_reflect:

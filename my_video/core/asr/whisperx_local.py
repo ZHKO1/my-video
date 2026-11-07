@@ -61,7 +61,7 @@ def check_hf_mirror() -> str | None:
             if response_time < best_time:
                 best_time = response_time
                 fastest_url = f"https://{domain}"
-            logger.info(f"{name} mirror responded in {response_time:.2f}s")
+            logger.debug("%s mirror responded in %.2fs", name, response_time)
 
     if best_time == float("inf"):
         logger.warning("All HuggingFace mirrors failed, using default endpoint")
@@ -88,16 +88,17 @@ def whisperx_audio(
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         batch_size = 16 if gpu_mem > 8 else 2
         compute_type = "float16" if torch.cuda.is_bf16_supported() else "int8"
-        logger.info(
+        logger.debug(
             f"Using WhisperX on {device} (GPU memory={gpu_mem:.2f}GB, batch_size={batch_size}, compute_type={compute_type})"
         )
     else:
         batch_size = 1
         compute_type = "int8"
-        logger.info(
+        logger.debug(
             f"Using WhisperX on {device} (batch_size={batch_size}, compute_type={compute_type})"
         )
 
+    logger.info("Using WhisperX model %s on %s", model_name, device)
     model_ref = model_name
     if model_dir:
         candidate = Path(model_dir) / model_name

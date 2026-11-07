@@ -73,6 +73,13 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Run 'my_video <command> --help' for details on each command.",
     )
     parser.add_argument("--version", action="version", version=_get_version())
+    parser.add_argument(
+        "--log-level",
+        type=str.upper,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Minimum application log level (default: INFO); place before the command",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="command")
 
@@ -128,16 +135,23 @@ def _load_config() -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
     logger = logging.getLogger("my_video")
     if not any(getattr(handler, "_my_video_cli", False) for handler in logger.handlers):
         handler = logging.StreamHandler(sys.stderr)
         handler._my_video_cli = True
-        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
         logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    log_format = (
+        "%(asctime)s %(levelname)s %(name)s: %(message)s"
+        if args.log_level == "DEBUG"
+        else "%(levelname)s: %(message)s"
+    )
+    for handler in logger.handlers:
+        if getattr(handler, "_my_video_cli", False):
+            handler.setFormatter(logging.Formatter(log_format))
+    logger.setLevel(args.log_level)
     logger.propagate = False
-    parser = build_parser()
-    args = parser.parse_args(argv)
 
     if not args.command:
         parser.print_help()

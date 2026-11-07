@@ -65,6 +65,7 @@ def run(args: Namespace, config: dict) -> int:
             custom_prompt="",
         )
         processors.append(optimizer)
+        logger.info("Optimizing subtitles")
         new_sentence_data = optimizer.optimize_subtitle(
             sentence_data,
             reference_data=reference_data,
@@ -82,6 +83,7 @@ def run(args: Namespace, config: dict) -> int:
             max_word_count=max_word_count,
         )
         processors.append(splitter)
+        logger.info("Splitting subtitles")
         subtitle_lines = splitter.split_subtitle(sentence_data.sentences)
         subtitle_lines.to_txt(paths.split_txt)
 
@@ -98,6 +100,7 @@ def run(args: Namespace, config: dict) -> int:
             is_reflect=need_reflect,
         )
         processors.append(translator)
+        logger.info("Translating subtitles")
         translated_lines = translator.translate_subtitle(subtitle_lines)
 
         translated_lines.to_srt(paths.src_srt, is_translation=False)

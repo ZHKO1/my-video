@@ -21,11 +21,25 @@ def except_handler(error_msg, retry=0, delay=1, default_return=None):
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    logger.error(f"{error_msg}: {e}, retry: {i + 1}/{retry}")
                     if i == retry:
                         if default_return is not None:
+                            logger.warning(
+                                "%s: %s; attempts exhausted (%s/%s), using default result",
+                                error_msg,
+                                e,
+                                i + 1,
+                                retry + 1,
+                            )
                             return default_return
                         raise last_exception from None
+                    logger.warning(
+                        "%s: %s; attempt %s/%s failed, retrying in %s seconds",
+                        error_msg,
+                        e,
+                        i + 1,
+                        retry + 1,
+                        delay * (2**i),
+                    )
                     time.sleep(delay * (2**i))
 
         return wrapper
@@ -48,7 +62,7 @@ def skip_fun_if_file_exist(*file_paths: PathResolver):
 
             if all(os.path.exists(p) for p in resolved_paths):
                 targets = ", ".join(f"<{p}>" for p in resolved_paths)
-                logger.warning(
+                logger.info(
                     f"File {targets} already exists, skip <{func.__name__}> step."
                 )
                 return None

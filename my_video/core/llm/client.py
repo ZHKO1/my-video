@@ -211,9 +211,11 @@ class LLMRequestClient:
         return _global_client
 
     @staticmethod
-    def before_sleep_log(_retry_state: RetryCallState) -> None:
+    def before_sleep_log(retry_state: RetryCallState) -> None:
         logger.warning(
-            "Rate Limit Error, sleeping and retrying... Please lower your thread concurrency or use better OpenAI API."
+            "LLM request rate limited; attempt %s/10 failed, retrying in %.1f seconds",
+            retry_state.attempt_number,
+            retry_state.next_action.sleep if retry_state.next_action else 0,
         )
 
 

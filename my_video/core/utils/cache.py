@@ -126,7 +126,7 @@ def memoize(cache_getter, **kwargs):
             cache_instance = cache_getter()
             result = cache_instance.get(cache_key, default=ENOVAL)
             if result is not ENOVAL:
-                logger.info("cache hit!")
+                logger.debug("Cache hit for %s", func.__qualname__)
                 return result
 
             result = func(*args, **kw)

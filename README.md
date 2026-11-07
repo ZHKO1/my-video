@@ -308,6 +308,15 @@ uv run my-video synthesize ~/work/my-video/<VideoTitle>
 
 core 和 CLI 的普通运行日志统一使用标准 `logging`，CLI 入口配置格式并输出到 stderr。成功和操作提示使用 INFO，警告使用 WARNING，错误使用 ERROR；LLM 请求日志仍单独保存。独立调用 core 时，调用方需要先初始化资源，并在所有工作线程结束后清理：
 
+默认显示 INFO 及以上等级（包括 WARNING、ERROR 和 CRITICAL）。使用全局参数 `--log-level` 调整最低显示等级，参数放在子命令之前：
+
+```bash
+my-video --log-level DEBUG subtitle /path/to/video-workspace
+my-video --log-level WARNING transcribe /path/to/video-workspace
+```
+
+支持 DEBUG、INFO、WARNING、ERROR、CRITICAL，大小写均可。缓存命中、批次处理和探测参数等细节使用 DEBUG；DEBUG 输出还包含时间和模块名。正常复用已有文件使用 INFO，重试和保留原文等降级使用 WARNING。意外异常在命令边界记录 ERROR 及堆栈。此参数只控制项目普通日志，不控制 FFmpeg、yt-dlp 等第三方输出，也不影响 `log/llm.log`。
+
 ```python
 from my_video.core.llm.client import init_llm_log, reset_llm_log
 from my_video.core.utils.cache import close_cache, init_cache

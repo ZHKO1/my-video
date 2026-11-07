@@ -42,7 +42,6 @@ class BaseTranslator(ABC):
             self._parallel_translate(chunks)
             return subtitle_data
         except Exception as e:
-            logger.error(f"Translation failed: {e!s}")
             raise RuntimeError(f"Translation failed: {e!s}") from e
 
     def _parallel_translate(self, chunks: list[list[SubtitleLine]]) -> None:
@@ -61,7 +60,14 @@ class BaseTranslator(ABC):
             try:
                 future.result()
             except Exception as e:
-                logger.error(f"Translation chunk failed: {e}")
+                chunk = future_to_chunk[future]
+                logger.warning(
+                    "Translation failed for lines %s-%s; keeping original text: %s",
+                    chunk[0].line_index,
+                    chunk[-1].line_index,
+                    e,
+                )
+                logger.debug("Translation chunk traceback", exc_info=True)
                 failed_count += len(future_to_chunk[future])
 
         # Raise if all or most translations failed
@@ -88,26 +94,24 @@ class BaseTranslator(ABC):
 
     def _safe_translate_chunk(self, chunk: list[SubtitleLine]) -> list[SubtitleLine]:
         """安全的翻译块"""
+        cache_key = self._get_cache_key(chunk)
         try:
-            cache_key = self._get_cache_key(chunk)
-            try:
-                cached_result = self._cache.get(cache_key, default=None)
-            except Exception:
-                # Graceful degradation: corrupted cache (e.g. old pickle from app→my_video rename)
-                cached_result = None
-                self._cache.delete(cache_key)
-            if cached_result is not None:
-                self._apply_translated_chunk(chunk, cached_result)
-                return chunk
+            cached_result = self._cache.get(cache_key, default=None)
+        except Exception as exc:
+            # Graceful degradation: corrupted cache (e.g. old pickle from app→my_video rename)
+            logger.warning(
+                "Translation cache read failed; discarding entry and retranslating: %s",
+                exc,
+            )
+            cached_result = None
+            self._cache.delete(cache_key)
+        if cached_result is not None:
+            self._apply_translated_chunk(chunk, cached_result)
+            return chunk
 
-            result = self._translate_chunk(chunk)
-
-            self._cache.set(cache_key, result, expire=86400 * 7)
-            return result
-
-        except Exception as e:
-            logger.error(f"Translation failed: {e!s}")
-            raise
+        result = self._translate_chunk(chunk)
+        self._cache.set(cache_key, result, expire=86400 * 7)
+        return result
 
     @abstractmethod
     def _translate_chunk(

@@ -87,57 +87,53 @@ def fetch_video_info(
 def download(request: DownloadRequest) -> DownloadResult:
     origin_path = Path(request.origin_dir).expanduser().resolve()
 
-    try:
-        origin_path.mkdir(parents=False, exist_ok=False)
-        ydl_opts = {
-            "noplaylist": True,
-            "format": "(bestvideo[height<=1080]+bestaudio/best[height<=1080])",
-            "writethumbnail": True,
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-            "subtitleslangs": ["en.*"],
-            "outtmpl": {
-                "default": str(origin_path / "video.%(ext)s"),
-                "subtitle": str(origin_path / "subtitle.%(ext)s"),
-                "thumbnail": str(origin_path / "thumb.%(ext)s"),
+    origin_path.mkdir(parents=False, exist_ok=False)
+    ydl_opts = {
+        "noplaylist": True,
+        "format": "(bestvideo[height<=1080]+bestaudio/best[height<=1080])",
+        "writethumbnail": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": ["en.*"],
+        "outtmpl": {
+            "default": str(origin_path / "video.%(ext)s"),
+            "subtitle": str(origin_path / "subtitle.%(ext)s"),
+            "thumbnail": str(origin_path / "thumb.%(ext)s"),
+        },
+        "postprocessors": [
+            {
+                "key": "FFmpegSubtitlesConvertor",
+                "format": "srt",
+                "when": "before_dl",
             },
-            "postprocessors": [
-                {
-                    "key": "FFmpegSubtitlesConvertor",
-                    "format": "srt",
-                    "when": "before_dl",
-                },
-                {
-                    "key": "FFmpegThumbnailsConvertor",
-                    "format": "jpg",
-                },
-            ],
-            "remote_components": ["ejs:github"],
-        }
+            {
+                "key": "FFmpegThumbnailsConvertor",
+                "format": "jpg",
+            },
+        ],
+        "remote_components": ["ejs:github"],
+    }
 
-        if request.cookie_path:
-            ydl_opts["cookiefile"] = str(Path(request.cookie_path).expanduser())
-        if request.proxy:
-            ydl_opts["proxy"] = request.proxy
+    if request.cookie_path:
+        ydl_opts["cookiefile"] = str(Path(request.cookie_path).expanduser())
+    if request.proxy:
+        ydl_opts["proxy"] = request.proxy
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.extract_info(request.url, download=True)
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.extract_info(request.url, download=True)
 
-        result = collect_downloaded_paths(origin_path)
+    result = collect_downloaded_paths(origin_path)
 
-        if not result.video_path:
-            raise FileNotFoundError("Video file not found after download")
-        if not result.subtitle_path:
-            logger.info("Subtitle file not found, skipping")
-        if not result.thumbnail_path:
-            logger.info("Thumbnail file not found, skipping")
+    if not result.video_path:
+        raise FileNotFoundError("Video file not found after download")
+    if not result.subtitle_path:
+        logger.info("Subtitle file not found, skipping")
+    if not result.thumbnail_path:
+        logger.info("Thumbnail file not found, skipping")
 
-        logger.info(f"Downloaded to {origin_path}/")
-        logger.info(f"Video+audio: {result.video_path}")
-        return result
-    except Exception as exc:
-        logger.error(str(exc))
-        raise
+    logger.info(f"Downloaded to {origin_path}/")
+    logger.info(f"Video+audio: {result.video_path}")
+    return result
 
 
 __all__ = [

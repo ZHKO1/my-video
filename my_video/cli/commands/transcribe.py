@@ -45,7 +45,7 @@ def run(args: Namespace, config: dict) -> int:
 
     paths = build_workspace_paths(workspace_path)
     if paths.whisperx_json.exists():
-        logger.info(f"{paths.whisperx_json!s} is existed")
+        logger.info("%s already exists, skipping transcription", paths.whisperx_json)
         return EXIT.SUCCESS
 
     try:

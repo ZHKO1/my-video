@@ -102,7 +102,6 @@ class SubtitleOptimizer:
             return self._write_back_groups(sentence_groups, optimized_dict)
 
         except Exception as e:
-            logger.error(f"Optimization failed: {e!s}")
             raise RuntimeError(f"Optimization failed: {e!s}") from e
 
     def _batch_sentence_groups(
@@ -184,7 +183,12 @@ class SubtitleOptimizer:
                 result = future.result()
                 optimized_dict.update(result)
             except Exception as e:
-                logger.error(f"Optimization batch failed: {e!s}")
+                logger.warning(
+                    "Optimization failed for groups %s-%s; keeping original text: %s",
+                    batch.groups[0].index,
+                    batch.groups[-1].index,
+                    e,
+                )
                 optimized_dict.update(batch.subtitle_chunk)  # 失败时保留原文
 
         return optimized_dict
@@ -198,7 +202,7 @@ class SubtitleOptimizer:
         Returns:
             优化后的字幕批次
         """
-        logger.info(
+        logger.debug(
             f"[+]Optimizing subtitles: {batch.groups[0].index} - "
             f"{batch.groups[-1].index}"
         )
@@ -206,7 +210,12 @@ class SubtitleOptimizer:
             result = self.agent_loop(batch.subtitle_chunk, batch.reference_text)
             return result
         except Exception as e:
-            logger.error(f"Optimization failed: {e!s}")
+            logger.warning(
+                "Optimization failed for groups %s-%s; keeping original text: %s",
+                batch.groups[0].index,
+                batch.groups[-1].index,
+                e,
+            )
             return batch.subtitle_chunk
 
     def agent_loop(

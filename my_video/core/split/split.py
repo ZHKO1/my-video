@@ -1,7 +1,6 @@
 import atexit
 import json
 import logging
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -101,23 +100,24 @@ class SubtitleSplitter:
         for future in as_completed(futures):
             if not self.is_running:
                 break
-            try:
-                split_results.update(future.result())
-            except Exception:
-                logger.error(traceback.format_exc())
-                raise
+            split_results.update(future.result())
 
         return split_results
 
     def _split_chunk(self, batch: dict[str, str]) -> dict[str, list[str]]:
         start_idx = next(iter(batch))
         end_idx = next(reversed(batch))
-        logger.info(f"[+]Spliting subtitles: {start_idx} - {end_idx}")
+        logger.debug("Splitting subtitles: %s - %s", start_idx, end_idx)
 
         try:
             return self._agent_loop(batch)
         except Exception as exc:
-            logger.error(f"Split failed: {exc}")
+            logger.warning(
+                "Split failed for groups %s-%s; keeping unsplit text: %s",
+                start_idx,
+                end_idx,
+                exc,
+            )
             return {key: [text] for key, text in batch.items()}
 
     def _agent_loop(self, batch: dict[str, str]) -> dict[str, list[str]]:

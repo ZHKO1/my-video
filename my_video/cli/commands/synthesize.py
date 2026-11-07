@@ -209,9 +209,9 @@ def run(args: Namespace, config: dict) -> int:
             ffmpeg_gpu,
         )
         _generate_output_md(paths)
-        logger.info(f"logger.md generated -> {paths.output_md}")
+        logger.info("output.md generated -> %s", paths.output_md)
     except Exception as exc:
-        logger.error(str(exc))
+        logger.exception("Command failed: %s", exc)
         return EXIT.RUNTIME_ERROR
 
     return EXIT.SUCCESS
