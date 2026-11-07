@@ -1,9 +1,11 @@
 import gc
+import logging
 from pathlib import Path
 
-from my_video.cli import output
 from my_video.core.asr.audio_preprocess import normalize_audio_volume
 from my_video.core.utils.decorator import skip_fun_if_file_exist
+
+logger = logging.getLogger(__name__)
 
 
 @skip_fun_if_file_exist(lambda _, vocal_audio: vocal_audio)
@@ -46,13 +48,13 @@ def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
 
     vocal_audio.parent.mkdir(parents=True, exist_ok=True)
 
-    output.info("Loading Demucs model: htdemucs")
+    logger.info("Loading Demucs model: htdemucs")
     model = get_model("htdemucs")
     separator = PreloadedSeparator(model=model)
 
-    output.info("Separating vocals and background audio")
+    logger.info("Separating vocals and background audio")
     _, outputs = separator.separate_audio_file(str(raw_audio))
-    output.info("separate_audio_file completed")
+    logger.info("separate_audio_file completed")
 
     kwargs = {
         "samplerate": model.samplerate,
@@ -64,10 +66,10 @@ def demucs_audio(raw_audio: Path, vocal_audio: Path) -> None:
     }
 
     save_audio(outputs["vocals"].cpu(), str(vocal_audio), **kwargs)
-    output.info("save_audio completed")
+    logger.info("save_audio completed")
 
     del outputs, model, separator
     gc.collect()
 
-    output.info("Demucs separation completed")
+    logger.info("Demucs separation completed")
     normalize_audio_volume(str(vocal_audio), str(vocal_audio), format="wav")

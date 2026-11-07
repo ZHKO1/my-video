@@ -1,6 +1,6 @@
 """Unified LLM client for the application."""
 
-import json
+import logging
 import os
 import threading
 from pathlib import Path
@@ -18,13 +18,26 @@ from tenacity import (
     wait_random_exponential,
 )
 
-from my_video.cli import output
-from my_video.cli.config import get_work_dir, load_toml_config
 from my_video.core.utils.cache import get_llm_cache, memoize
 from my_video.core.workspace import format_beijing_time
 
+logger = logging.getLogger(__name__)
+
 _global_client: OpenAI | None = None
 _client_lock = threading.Lock()
+_llm_log_path: Path | None = None
+
+
+def init_llm_log(log_path: str | Path) -> None:
+    global _llm_log_path
+    if _llm_log_path is not None:
+        raise RuntimeError("Workspace LLM log is already initialized")
+    _llm_log_path = Path(log_path).expanduser().resolve()
+
+
+def reset_llm_log() -> None:
+    global _llm_log_path
+    _llm_log_path = None
 
 
 class LLMResponseValidator:
@@ -70,7 +83,10 @@ class LLMResponseValidator:
             return None, f"JSON parse error: {exc}"
 
         if not isinstance(parsed_result, dict):
-            return None, f"JSON structure error: expected dict, got {type(parsed_result).__name__}."
+            return (
+                None,
+                f"JSON structure error: expected dict, got {type(parsed_result).__name__}.",
+            )
 
         return parsed_result, ""
 
@@ -84,16 +100,11 @@ class LLMResponseValidator:
 class LLMLogWriter:
     _log_lock = threading.Lock()
 
-    @staticmethod
-    def _load_config() -> dict[str, Any]:
-        config, _ = load_toml_config()
-        return config or {}
-
     @classmethod
     def _get_llm_log_path(cls) -> Path:
-        config = cls._load_config()
-        work_dir = get_work_dir(config) or "."
-        return Path(work_dir) / "log" / "llm.log"
+        if _llm_log_path is None:
+            raise RuntimeError("Workspace LLM log is not initialized")
+        return _llm_log_path
 
     @staticmethod
     def _format_exception(exc: Exception) -> str:
@@ -201,7 +212,7 @@ class LLMRequestClient:
 
     @staticmethod
     def before_sleep_log(_retry_state: RetryCallState) -> None:
-        output.warn(
+        logger.warning(
             "Rate Limit Error, sleeping and retrying... Please lower your thread concurrency or use better OpenAI API."
         )
 
@@ -264,7 +275,7 @@ def _call_llm_api(
 
 
 # TODO 记得改expire
-@memoize(get_llm_cache(), expire=3600000, typed=True)
+@memoize(get_llm_cache, expire=3600000, typed=True)
 def call_llm(
     messages: list[dict],
     model: str,
@@ -272,6 +283,7 @@ def call_llm(
     **kwargs: Any,
 ) -> Any:
     """Call LLM API with automatic caching."""
+    LLMLogWriter._get_llm_log_path()
     try:
         response = _call_llm_api(messages, model, temperature, **kwargs)
     except Exception as exc:

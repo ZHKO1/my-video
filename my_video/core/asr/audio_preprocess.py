@@ -1,12 +1,14 @@
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from pydub import AudioSegment
 
-from my_video.cli import output
 from my_video.core.utils.decorator import skip_fun_if_file_exist
 from my_video.core.utils.helper import write_srt
+
+logger = logging.getLogger(__name__)
 
 
 def _ffmpeg_has_encoder(encoder_name: str) -> bool:
@@ -24,7 +26,7 @@ def _ffmpeg_has_encoder(encoder_name: str) -> bool:
 def convert_video_to_audio(video_path: str, audio_path: str):
     audio_path = Path(audio_path)
     audio_path.parent.mkdir(parents=True, exist_ok=True)
-    output.info("Converting to high quality audio with FFmpeg ......")
+    logger.info("Converting to high quality audio with FFmpeg ......")
     if _ffmpeg_has_encoder("libmp3lame"):
         cmd = [
             "ffmpeg",
@@ -45,7 +47,7 @@ def convert_video_to_audio(video_path: str, audio_path: str):
             str(audio_path),
         ]
     subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
-    output.info(f"Converted <{video_path}> to <{audio_path}> with FFmpeg")
+    logger.info(f"Converted <{video_path}> to <{audio_path}> with FFmpeg")
 
 
 def normalize_audio_volume(
@@ -58,7 +60,7 @@ def normalize_audio_volume(
     change_in_db = target_db - audio.dBFS
     normalized_audio = audio.apply_gain(change_in_db)
     normalized_audio.export(output_path, format=format)
-    output.info(f"Normalized audio from {audio.dBFS:.1f}dB to {target_db:.1f}dB")
+    logger.info(f"Normalized audio from {audio.dBFS:.1f}dB to {target_db:.1f}dB")
     return output_path
 
 
@@ -78,4 +80,4 @@ def whisperx_segments_to_srt_entries(
 
 def save_srt(segments: list[dict], output_path: Path) -> None:
     write_srt(output_path, whisperx_segments_to_srt_entries(segments))
-    output.info(f"Subtitle file saved to {output_path!s}")
+    logger.info(f"Subtitle file saved to {output_path!s}")

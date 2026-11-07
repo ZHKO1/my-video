@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import time
 from argparse import Namespace
-from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import cv2
 
-from my_video.cli import EXIT, output
+from my_video.cli import EXIT
 from my_video.cli.config import get_toml_value
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import WorkspacePaths, build_workspace_paths
+
+logger = logging.getLogger(__name__)
 
 _BEIJING_TZ = ZoneInfo("Asia/Shanghai")
 
@@ -78,7 +80,7 @@ def merge_subtitles_to_video(
     if target_width <= 0 or target_height <= 0:
         raise RuntimeError(f"Unable to read video resolution from {video_file}")
 
-    output.info(f"Video resolution: {target_width}x{target_height}")
+    logger.info(f"Video resolution: {target_width}x{target_height}")
 
     src_srt = _escape_subtitle_path(src_srt_path)
     trans_srt = _escape_subtitle_path(trans_srt_path)
@@ -110,16 +112,16 @@ def merge_subtitles_to_video(
 
     if ffmpeg_gpu:
         if check_gpu_available():
-            output.info("Using GPU acceleration via h264_nvenc")
+            logger.info("Using GPU acceleration via h264_nvenc")
             ffmpeg_cmd.extend(["-c:v", "h264_nvenc"])
         else:
-            output.warn(
+            logger.warning(
                 "synthesize.ffmpeg_gpu is enabled, but h264_nvenc is unavailable; falling back to CPU encoding."
             )
 
     ffmpeg_cmd.extend(["-y", str(output_path)])
 
-    output.info("Start merging subtitles to video")
+    logger.info("Start merging subtitles to video")
     start_time = time.time()
     process = subprocess.Popen(ffmpeg_cmd)
 
@@ -135,7 +137,7 @@ def merge_subtitles_to_video(
             f"FFmpeg execution failed with exit code {process.returncode}"
         )
 
-    output.success(
+    logger.info(
         f"Subtitle merge complete in {time.time() - start_time:.2f}s -> {output_path}"
     )
 
@@ -175,24 +177,24 @@ def _generate_output_md(paths: WorkspacePaths) -> None:
 def run(args: Namespace, config: dict) -> int:
     workspace_path = Path(args.workspace_path).expanduser()
     if not workspace_path.is_dir():
-        output.error(f"Workspace not found: {workspace_path}")
+        logger.error(f"Workspace not found: {workspace_path}")
         return EXIT.FILE_NOT_FOUND
 
     status_path = workspace_path / "status.json"
     status = read_json(status_path)
     if status is None:
-        output.error(f"status.json not found: {status_path}")
+        logger.error(f"status.json not found: {status_path}")
         return EXIT.FILE_NOT_FOUND
 
     origin = status.get("origin")
     video_path = origin.get("video_path") if isinstance(origin, dict) else None
     if not video_path:
-        output.error(f"origin.video_path missing in status.json: {status_path}")
+        logger.error(f"origin.video_path missing in status.json: {status_path}")
         return EXIT.RUNTIME_ERROR
 
     input_path = Path(video_path).expanduser()
     if not input_path.exists():
-        output.error(f"Video file not found: {input_path}")
+        logger.error(f"Video file not found: {input_path}")
         return EXIT.FILE_NOT_FOUND
 
     paths = build_workspace_paths(workspace_path)
@@ -207,9 +209,9 @@ def run(args: Namespace, config: dict) -> int:
             ffmpeg_gpu,
         )
         _generate_output_md(paths)
-        output.success(f"output.md generated -> {paths.output_md}")
+        logger.info(f"logger.md generated -> {paths.output_md}")
     except Exception as exc:
-        output.error(str(exc))
+        logger.error(str(exc))
         return EXIT.RUNTIME_ERROR
 
     return EXIT.SUCCESS

@@ -1,7 +1,6 @@
 from my_video.core.asr.asr_data import SubtitleSegment, SubtitleSentence
 from my_video.core.split.split import MAX_STEPS, SubtitleSplitter
 from tests.helpers.agent_loop import (
-    install_warnings,
     make_response,
     make_response_without_message,
     sequence_call_llm,
@@ -174,7 +173,7 @@ class TestValidate:
 
 
 class TestAgentLoop:
-    def test_empty(self, monkeypatch) -> None:
+    def test_empty(self, monkeypatch, caplog) -> None:
         splitter = SubtitleSplitter(
             thread_num=1,
             batch_num=20,
@@ -182,7 +181,6 @@ class TestAgentLoop:
             custom_prompt="",
             max_word_count=10,
         )
-        warnings = install_warnings(monkeypatch, "my_video.core.split.split.output.warn")
         monkeypatch.setattr(
             "my_video.core.split.split.call_llm",
             sequence_call_llm(
@@ -196,11 +194,11 @@ class TestAgentLoop:
         result = splitter._agent_loop({"0": "hello world"})
 
         assert result == {"0": ["hello", "world"]}
-        assert "分割验证失败[resp-1]" in warnings[0]
-        assert "Response content is empty." in warnings[0]
+        assert "分割验证失败[resp-1]" in caplog.messages[0]
+        assert "Response content is empty." in caplog.messages[0]
         splitter.stop()
 
-    def test_invalid_json(self, monkeypatch) -> None:
+    def test_invalid_json(self, monkeypatch, caplog) -> None:
         splitter = SubtitleSplitter(
             thread_num=1,
             batch_num=20,
@@ -208,7 +206,6 @@ class TestAgentLoop:
             custom_prompt="",
             max_word_count=10,
         )
-        warnings = install_warnings(monkeypatch, "my_video.core.split.split.output.warn")
         monkeypatch.setattr(
             "my_video.core.split.split.call_llm",
             sequence_call_llm(
@@ -222,11 +219,11 @@ class TestAgentLoop:
         result = splitter._agent_loop({"0": "hello world"})
 
         assert result == {"0": ["hello", "world"]}
-        assert "分割验证失败[split-bad]" in warnings[0]
-        assert "expected dict" in warnings[0]
+        assert "分割验证失败[split-bad]" in caplog.messages[0]
+        assert "expected dict" in caplog.messages[0]
         splitter.stop()
 
-    def test_warn(self, monkeypatch) -> None:
+    def test_warn(self, monkeypatch, caplog) -> None:
         splitter = SubtitleSplitter(
             thread_num=1,
             batch_num=20,
@@ -234,7 +231,6 @@ class TestAgentLoop:
             custom_prompt="",
             max_word_count=10,
         )
-        warnings = install_warnings(monkeypatch, "my_video.core.split.split.output.warn")
         monkeypatch.setattr(
             "my_video.core.split.split.call_llm",
             sequence_call_llm(
@@ -250,11 +246,11 @@ class TestAgentLoop:
         assert result == {"0": ["hello", "world"]}
         assert (
             "分割验证失败[split-resp-1]，开始反馈循环 (第1次尝试): Content changed too much"
-            in warnings[0]
+            in caplog.messages[0]
         )
         splitter.stop()
 
-    def test_max_steps(self, monkeypatch) -> None:
+    def test_max_steps(self, monkeypatch, caplog) -> None:
         splitter = SubtitleSplitter(
             thread_num=1,
             batch_num=20,
@@ -262,12 +258,13 @@ class TestAgentLoop:
             custom_prompt="",
             max_word_count=1,
         )
-        warnings = install_warnings(monkeypatch, "my_video.core.split.split.output.warn")
         monkeypatch.setattr(
             "my_video.core.split.split.call_llm",
             sequence_call_llm(
                 [
-                    make_response('{"0":"hello<br>brave world"}', response_id=f"split-{i}")
+                    make_response(
+                        '{"0":"hello<br>brave world"}', response_id=f"split-{i}"
+                    )
                     for i in range(MAX_STEPS)
                 ]
             ),
@@ -276,10 +273,13 @@ class TestAgentLoop:
         result = splitter._agent_loop({"0": "hello brave world"})
 
         assert result == {"0": ["hello", "brave world"]}
-        assert warnings[-1] == f"Max attempts reached({MAX_STEPS})，returning last result"
+        assert (
+            caplog.messages[-1]
+            == f"Max attempts reached({MAX_STEPS})，returning last result"
+        )
         splitter.stop()
 
-    def test_response_shape(self, monkeypatch) -> None:
+    def test_response_shape(self, monkeypatch, caplog) -> None:
         splitter = SubtitleSplitter(
             thread_num=1,
             batch_num=20,
@@ -287,7 +287,6 @@ class TestAgentLoop:
             custom_prompt="",
             max_word_count=10,
         )
-        warnings = install_warnings(monkeypatch, "my_video.core.split.split.output.warn")
         monkeypatch.setattr(
             "my_video.core.split.split.call_llm",
             sequence_call_llm(
@@ -302,8 +301,11 @@ class TestAgentLoop:
         result = splitter._agent_loop({"0": "hello world"})
 
         assert result == {"0": ["hello world"]}
-        assert "choices is empty" in warnings[0]
-        assert "message is missing" in warnings[1]
-        assert "content is missing" in warnings[2]
-        assert warnings[-1] == f"Max attempts reached({MAX_STEPS})，returning last result"
+        assert "choices is empty" in caplog.messages[0]
+        assert "message is missing" in caplog.messages[1]
+        assert "content is missing" in caplog.messages[2]
+        assert (
+            caplog.messages[-1]
+            == f"Max attempts reached({MAX_STEPS})，returning last result"
+        )
         splitter.stop()

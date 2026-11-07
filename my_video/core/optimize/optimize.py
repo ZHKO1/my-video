@@ -5,11 +5,11 @@
 
 import atexit
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from my_video.cli import output
 from my_video.core.utils.text_diff import (
     render_inline_diff,
     rewrite_sentence_segments_with_timestamps,
@@ -28,6 +28,8 @@ from ..utils.helper import (
     split_tokens,
     text_bases,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_STEPS = 3
 REFERENCE_TIME_PADDING_MS = 5000
@@ -100,7 +102,7 @@ class SubtitleOptimizer:
             return self._write_back_groups(sentence_groups, optimized_dict)
 
         except Exception as e:
-            output.error(f"Optimization failed: {e!s}")
+            logger.error(f"Optimization failed: {e!s}")
             raise RuntimeError(f"Optimization failed: {e!s}") from e
 
     def _batch_sentence_groups(
@@ -182,7 +184,7 @@ class SubtitleOptimizer:
                 result = future.result()
                 optimized_dict.update(result)
             except Exception as e:
-                output.error(f"Optimization batch failed: {e!s}")
+                logger.error(f"Optimization batch failed: {e!s}")
                 optimized_dict.update(batch.subtitle_chunk)  # 失败时保留原文
 
         return optimized_dict
@@ -196,7 +198,7 @@ class SubtitleOptimizer:
         Returns:
             优化后的字幕批次
         """
-        output.info(
+        logger.info(
             f"[+]Optimizing subtitles: {batch.groups[0].index} - "
             f"{batch.groups[-1].index}"
         )
@@ -204,7 +206,7 @@ class SubtitleOptimizer:
             result = self.agent_loop(batch.subtitle_chunk, batch.reference_text)
             return result
         except Exception as e:
-            output.error(f"Optimization failed: {e!s}")
+            logger.error(f"Optimization failed: {e!s}")
             return batch.subtitle_chunk
 
     def agent_loop(
@@ -268,7 +270,7 @@ class SubtitleOptimizer:
                         return result_dict
 
             # 验证失败，添加反馈
-            output.warn(
+            logger.warning(
                 f"优化验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
             messages.append({"role": "assistant", "content": result_text or ""})
@@ -283,7 +285,7 @@ class SubtitleOptimizer:
             )
 
         # 达到最大步数
-        output.warn(f"Max attempts reached({MAX_STEPS})，returning last result")
+        logger.warning(f"Max attempts reached({MAX_STEPS})，returning last result")
         return last_result if last_result else subtitle_chunk
 
     def _validate_optimization_result(
@@ -365,7 +367,11 @@ class SubtitleOptimizer:
         new_groups: list[SubtitleSentence] = []
         for group in sentence_groups:
             optimized_text = optimized_dict.get(str(group.index))
-            if optimized_text is None or not optimized_text.strip() or optimized_text.strip() == group.text.strip():
+            if (
+                optimized_text is None
+                or not optimized_text.strip()
+                or optimized_text.strip() == group.text.strip()
+            ):
                 group.optimized_text = ""
                 group.optimize_log = ""
                 new_groups.append(
@@ -383,7 +389,7 @@ class SubtitleOptimizer:
             optimize_log = cls._build_group_change_log(group.text, optimized_text)
             group.optimized_text = optimized_text
             group.optimize_log = optimize_log
-            
+
             rewritten_segments = cls._rewrite_group_segments(
                 group.segments, optimized_text
             )
@@ -404,7 +410,9 @@ class SubtitleOptimizer:
         original_segments: list[SubtitleSegment],
         optimized_text: str,
     ) -> list[SubtitleSegment]:
-        return rewrite_sentence_segments_with_timestamps(original_segments, optimized_text)
+        return rewrite_sentence_segments_with_timestamps(
+            original_segments, optimized_text
+        )
 
     @classmethod
     def _build_group_change_log(cls, original_text: str, optimized_text: str) -> str:
@@ -441,16 +449,9 @@ class SubtitleOptimizer:
         )
 
     def stop(self) -> None:
-        """停止优化器并清理资源"""
-        if not self.is_running:
-            return
-
+        """Cancel pending tasks and wait for running workers to finish."""
         self.is_running = False
-
-        if self.executor:
-            try:
-                self.executor.shutdown(wait=False, cancel_futures=True)
-            except Exception:
-                pass
-            finally:
-                self.executor = None
+        if self.executor is not None:
+            self.executor.shutdown(wait=True, cancel_futures=True)
+            self.executor = None
+        atexit.unregister(self.stop)

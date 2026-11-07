@@ -13,6 +13,8 @@ Commands:
 """
 
 import argparse
+import logging
+import sys
 
 from my_video.cli import EXIT
 from my_video.cli.config import load_toml_config
@@ -126,6 +128,14 @@ def _load_config() -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    logger = logging.getLogger("my_video")
+    if not any(getattr(handler, "_my_video_cli", False) for handler in logger.handlers):
+        handler = logging.StreamHandler(sys.stderr)
+        handler._my_video_cli = True
+        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
     parser = build_parser()
     args = parser.parse_args(argv)
 

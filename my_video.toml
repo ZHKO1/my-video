@@ -1,11 +1,11 @@
 work_dir = "~/work/my-video"
 
 [llm]
-model = "deepseek-v4-flash"
+model = "deepseek-flash"
 
 [download]
 cookie_path = "./cookies.txt"
-proxy = "socks5://192.168.71.5:20170/"
+proxy = "socks5://192.168.3.138:20170/"
 
 [transcribe]
 demucs = true

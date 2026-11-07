@@ -30,9 +30,3 @@ def sequence_call_llm(responses: Iterable[Any]) -> Callable[..., Any]:
         return next(iterator)
 
     return fake_call_llm
-
-
-def install_warnings(monkeypatch: Any, target: str) -> list[str]:
-    warnings: list[str] = []
-    monkeypatch.setattr(target, lambda message: warnings.append(message))
-    return warnings

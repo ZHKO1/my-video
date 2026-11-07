@@ -39,6 +39,8 @@ class WorkspacePaths:
     summary_json: Path
     output_mp4: Path
     output_md: Path
+    cache_dir: Path
+    llm_log_path: Path
 
 
 def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
@@ -66,6 +68,8 @@ def build_workspace_paths(workspace_path: str | Path) -> WorkspacePaths:
         summary_json=subtitle_dir / "summary.json",
         output_mp4=base / "output.mp4",
         output_md=base / "output.md",
+        cache_dir=base / "cache",
+        llm_log_path=base / "log" / "llm.log",
     )
 
 

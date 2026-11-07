@@ -1,10 +1,12 @@
 import functools
+import logging
 import os
 import time
 from collections.abc import Callable
 from os import PathLike
 
-from my_video.cli import output
+logger = logging.getLogger(__name__)
+
 
 PathResolver = str | PathLike[str] | Callable[..., str | PathLike[str]]
 
@@ -19,7 +21,7 @@ def except_handler(error_msg, retry=0, delay=1, default_return=None):
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    output.error(f"{error_msg}: {e}, retry: {i + 1}/{retry}")
+                    logger.error(f"{error_msg}: {e}, retry: {i + 1}/{retry}")
                     if i == retry:
                         if default_return is not None:
                             return default_return
@@ -46,7 +48,7 @@ def skip_fun_if_file_exist(*file_paths: PathResolver):
 
             if all(os.path.exists(p) for p in resolved_paths):
                 targets = ", ".join(f"<{p}>" for p in resolved_paths)
-                output.warn(
+                logger.warning(
                     f"File {targets} already exists, skip <{func.__name__}> step."
                 )
                 return None

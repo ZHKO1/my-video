@@ -6,7 +6,6 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from my_video.core.llm import client as llm_client
-from my_video.core.utils.cache import get_llm_cache
 
 
 class _FakeMessage:
@@ -80,21 +79,8 @@ class _FakeNoneContentResponse:
         self.choices = [_FakeNoneContentChoice()]
 
 
-@pytest.fixture(autouse=True)
-def clear_llm_cache() -> None:
-    get_llm_cache().clear()
-    yield
-    get_llm_cache().clear()
-
-
 def _set_work_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    work_dir = tmp_path / "work"
-    monkeypatch.setattr(
-        llm_client,
-        "load_toml_config",
-        lambda: ({"work_dir": str(work_dir)}, Path("my_video.toml")),
-    )
-    return work_dir
+    return tmp_path
 
 
 class TestCallLlm:
@@ -237,9 +223,7 @@ class TestCallLlm:
         assert "choice[0]:\nfirst\n" in log_text
         assert "choice[1]:\nsecond\n" in log_text
 
-    def test_timestamp(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_timestamp(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         work_dir = _set_work_dir(monkeypatch, tmp_path)
         monkeypatch.setattr(
             llm_client, "_call_llm_api", lambda *args, **kwargs: _FakeResponse("ok")
@@ -247,9 +231,11 @@ class TestCallLlm:
         monkeypatch.setattr(
             llm_client,
             "format_beijing_time",
-            lambda: datetime(2026, 1, 2, 3, 4, 5, tzinfo=ZoneInfo("UTC"))
-            .astimezone(ZoneInfo("Asia/Shanghai"))
-            .strftime("%Y-%m-%d %H:%M:%S"),
+            lambda: (
+                datetime(2026, 1, 2, 3, 4, 5, tzinfo=ZoneInfo("UTC"))
+                .astimezone(ZoneInfo("Asia/Shanghai"))
+                .strftime("%Y-%m-%d %H:%M:%S")
+            ),
         )
 
         llm_client.call_llm([{"role": "user", "content": "hello"}], model="demo-model")

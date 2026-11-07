@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yt_dlp
 
-from my_video.cli import output
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -127,15 +128,15 @@ def download(request: DownloadRequest) -> DownloadResult:
         if not result.video_path:
             raise FileNotFoundError("Video file not found after download")
         if not result.subtitle_path:
-            output.info("Subtitle file not found, skipping")
+            logger.info("Subtitle file not found, skipping")
         if not result.thumbnail_path:
-            output.info("Thumbnail file not found, skipping")
+            logger.info("Thumbnail file not found, skipping")
 
-        output.success(f"Downloaded to {origin_path}/")
-        output.info(f"Video+audio: {result.video_path}")
+        logger.info(f"Downloaded to {origin_path}/")
+        logger.info(f"Video+audio: {result.video_path}")
         return result
     except Exception as exc:
-        output.error(str(exc))
+        logger.error(str(exc))
         raise
 
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import traceback
+import logging
 from argparse import Namespace
 
-from my_video.cli import EXIT, output
+from my_video.cli import EXIT
 from my_video.cli.config import get_toml_str, get_work_dir
 from my_video.core.download.yt_dlp import DownloadRequest, download, fetch_video_info
 from my_video.core.utils.helper import write_json
@@ -14,6 +14,8 @@ from my_video.core.workspace import (
     create_workspace,
     update_status_for_workspace,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def run(args: Namespace, _config: dict) -> int:
@@ -86,6 +88,5 @@ def run(args: Namespace, _config: dict) -> int:
                 paths.status_path,
                 {"status": "failed", "failed_reason": str(e)},
             )
-        output.error(str(e))
-        output.error(traceback.format_exc())
+        logger.exception("Command failed: %s", e)
         return EXIT.RUNTIME_ERROR

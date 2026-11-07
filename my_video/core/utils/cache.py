@@ -7,6 +7,7 @@ Can be used by translation, ASR, and other modules that need caching.
 import functools
 import hashlib
 import json
+import logging
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -14,8 +15,8 @@ from typing import Any
 from diskcache import Cache
 from diskcache.core import ENOVAL
 
-from my_video.cli import output
-from my_video.cli.config import get_work_dir, load_toml_config
+logger = logging.getLogger(__name__)
+
 
 # Global cache switch
 _cache_enabled = True
@@ -38,36 +39,67 @@ def is_cache_enabled() -> bool:
     return _cache_enabled
 
 
-# Predefined cache instances for common use cases
-_config, _ = load_toml_config()
-_work_dir = Path(get_work_dir(_config) or ".")
+_llm_cache: Cache | None = None
+_translate_cache: Cache | None = None
 
-_llm_cache = Cache(str(_work_dir / "llm_translation"))
-_translate_cache = Cache(str(_work_dir / "translate_results"))
+
+def init_cache(cache_dir: str | Path) -> None:
+    """Initialize caches for the active workspace."""
+    global _llm_cache, _translate_cache
+    if _llm_cache is not None or _translate_cache is not None:
+        raise RuntimeError("Workspace cache is already initialized")
+    root = Path(cache_dir).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    llm_cache = Cache(str(root / "llm"))
+    try:
+        translate_cache = Cache(str(root / "translate"))
+    except BaseException:
+        llm_cache.close()
+        raise
+    _llm_cache = llm_cache
+    _translate_cache = translate_cache
+
+
+def close_cache() -> None:
+    """Close and detach caches for the active workspace."""
+    global _llm_cache, _translate_cache
+    llm_cache, translate_cache = _llm_cache, _translate_cache
+    _llm_cache = None
+    _translate_cache = None
+    try:
+        if llm_cache is not None:
+            llm_cache.close()
+    finally:
+        if translate_cache is not None:
+            translate_cache.close()
 
 
 def get_llm_cache() -> Cache:
     """Get LLM translation cache instance."""
+    if _llm_cache is None:
+        raise RuntimeError("Workspace cache is not initialized")
     return _llm_cache
 
 
 def get_translate_cache() -> Cache:
     """Get translate cache instance."""
+    if _translate_cache is None:
+        raise RuntimeError("Workspace cache is not initialized")
     return _translate_cache
 
 
-def memoize(cache_instance: Cache, **kwargs):
+def memoize(cache_getter, **kwargs):
     """Decorator to cache function results with global switch support.
 
     Args:
-        cache_instance: Cache instance to use (from get_llm_cache(), etc.)
+        cache_getter: Callable resolving the active workspace cache at runtime.
         **kwargs: Arguments passed to cache.memoize() (expire, typed, etc.)
 
     Returns:
         Decorated function
 
     Examples:
-        @memoize(get_llm_cache(), expire=3600, typed=True)
+        @memoize(get_llm_cache, expire=3600, typed=True)
         def call_api(prompt: str):
             response = client.chat.completions.create(...)
             if not response.choices:
@@ -91,9 +123,10 @@ def memoize(cache_instance: Cache, **kwargs):
                 }
             )
 
+            cache_instance = cache_getter()
             result = cache_instance.get(cache_key, default=ENOVAL)
             if result is not ENOVAL:
-                output.info("cache hit!")
+                logger.info("cache hit!")
                 return result
 
             result = func(*args, **kw)

@@ -1,13 +1,15 @@
 """翻译器基类"""
 
 import atexit
+import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from my_video.cli import output
 from my_video.core.asr.asr_data import SubtitleLine, SubtitleLines
 from my_video.core.translate.types import TargetLanguage
 from my_video.core.utils.cache import generate_cache_key, get_translate_cache
+
+logger = logging.getLogger(__name__)
 
 
 class BaseTranslator(ABC):
@@ -31,9 +33,7 @@ class BaseTranslator(ABC):
         self.executor = ThreadPoolExecutor(max_workers=self.thread_num)
         atexit.register(self.stop)
 
-    def translate_subtitle(
-        self, subtitle_data: SubtitleLines
-    ) -> SubtitleLines:
+    def translate_subtitle(self, subtitle_data: SubtitleLines) -> SubtitleLines:
         """翻译字幕文件并回写翻译结果。"""
         try:
             chunks = self._batch_subtitle_lines(subtitle_data.lines)
@@ -42,7 +42,7 @@ class BaseTranslator(ABC):
             self._parallel_translate(chunks)
             return subtitle_data
         except Exception as e:
-            output.error(f"Translation failed: {e!s}")
+            logger.error(f"Translation failed: {e!s}")
             raise RuntimeError(f"Translation failed: {e!s}") from e
 
     def _parallel_translate(self, chunks: list[list[SubtitleLine]]) -> None:
@@ -61,7 +61,7 @@ class BaseTranslator(ABC):
             try:
                 future.result()
             except Exception as e:
-                output.error(f"Translation chunk failed: {e}")
+                logger.error(f"Translation chunk failed: {e}")
                 failed_count += len(future_to_chunk[future])
 
         # Raise if all or most translations failed
@@ -73,7 +73,7 @@ class BaseTranslator(ABC):
                     f"({fail_rate:.0%}). Check your API key and network connection."
                 )
             elif failed_count > 0:
-                output.warn(
+                logger.warning(
                     f"Translation partially failed: {failed_count}/{total_segments} segments"
                 )
 
@@ -106,7 +106,7 @@ class BaseTranslator(ABC):
             return result
 
         except Exception as e:
-            output.error(f"Translation failed: {e!s}")
+            logger.error(f"Translation failed: {e!s}")
             raise
 
     @abstractmethod
@@ -174,16 +174,10 @@ class BaseTranslator(ABC):
 
         return batches
 
-    def stop(self):
-        """停止翻译器"""
-        if not self.is_running:
-            return
-
+    def stop(self) -> None:
+        """Cancel pending tasks and wait for running workers to finish."""
         self.is_running = False
-        if hasattr(self, "executor") and self.executor is not None:
-            try:
-                self.executor.shutdown(wait=False, cancel_futures=True)
-            except Exception as e:
-                output.error(f"Error closing thread pool: {e!s}")
-            finally:
-                self.executor = None
+        if self.executor is not None:
+            self.executor.shutdown(wait=True, cancel_futures=True)
+            self.executor = None
+        atexit.unregister(self.stop)

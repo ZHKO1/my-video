@@ -1,12 +1,12 @@
 import atexit
 import json
+import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any
 
-from my_video.cli import output
 from my_video.core.asr.asr_data import (
     SubtitleLine,
     SubtitleLines,
@@ -22,6 +22,8 @@ from my_video.core.llm import (
 from my_video.core.prompts import get_prompt
 from my_video.core.utils.helper import text_bases
 from my_video.core.utils.text_utils import count_words
+
+logger = logging.getLogger(__name__)
 
 MAX_STEPS = 3
 CONTENT_SIMILARITY_THRESHOLD = 0.95
@@ -56,9 +58,7 @@ class SubtitleSplitter:
         self.executor = ThreadPoolExecutor(max_workers=self.thread_num)
         atexit.register(self.stop)
 
-    def split_subtitle(
-        self, sentence_groups: list[SubtitleSentence]
-    ) -> SubtitleLines:
+    def split_subtitle(self, sentence_groups: list[SubtitleSentence]) -> SubtitleLines:
         requests = [
             SplitRequest(group_index=group.index, text=group.text)
             for group in sentence_groups
@@ -95,9 +95,7 @@ class SubtitleSplitter:
         if not batches:
             return {}
 
-        futures = [
-            self.executor.submit(self._split_chunk, batch) for batch in batches
-        ]
+        futures = [self.executor.submit(self._split_chunk, batch) for batch in batches]
         split_results: dict[str, list[str]] = {}
 
         for future in as_completed(futures):
@@ -106,7 +104,7 @@ class SubtitleSplitter:
             try:
                 split_results.update(future.result())
             except Exception:
-                output.error(traceback.format_exc())
+                logger.error(traceback.format_exc())
                 raise
 
         return split_results
@@ -114,12 +112,12 @@ class SubtitleSplitter:
     def _split_chunk(self, batch: dict[str, str]) -> dict[str, list[str]]:
         start_idx = next(iter(batch))
         end_idx = next(reversed(batch))
-        output.info(f"[+]Spliting subtitles: {start_idx} - {end_idx}")
+        logger.info(f"[+]Spliting subtitles: {start_idx} - {end_idx}")
 
         try:
             return self._agent_loop(batch)
         except Exception as exc:
-            output.error(f"Split failed: {exc}")
+            logger.error(f"Split failed: {exc}")
             return {key: [text] for key, text in batch.items()}
 
     def _agent_loop(self, batch: dict[str, str]) -> dict[str, list[str]]:
@@ -163,7 +161,7 @@ class SubtitleSplitter:
                         if is_valid:
                             return parsed_parts
 
-            output.warn(
+            logger.warning(
                 f"分割验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
             messages.append({"role": "assistant", "content": result_text or ""})
@@ -177,11 +175,9 @@ class SubtitleSplitter:
                 }
             )
 
-        output.warn(f"Max attempts reached({MAX_STEPS})，returning last result")
+        logger.warning(f"Max attempts reached({MAX_STEPS})，returning last result")
         return (
-            last_result
-            if last_result
-            else {key: [text] for key, text in batch.items()}
+            last_result if last_result else {key: [text] for key, text in batch.items()}
         )
 
     def _validate_json(
@@ -265,7 +261,7 @@ class SubtitleSplitter:
         try:
             segment_ranges = self._match_parts_to_segments(group.segments, parts)
         except Exception as exc:
-            output.warn(
+            logger.warning(
                 f"Failed to align split result for group {group.index}, fallback to single line: {exc}"
             )
             segment_ranges = [(0, len(group.segments) - 1)]
@@ -378,7 +374,9 @@ class SubtitleSplitter:
         return count_words(text) <= self.max_word_count
 
     def stop(self) -> None:
+        """Cancel pending tasks and wait for running workers to finish."""
         self.is_running = False
         if self.executor is not None:
-            self.executor.shutdown(wait=False, cancel_futures=True)
+            self.executor.shutdown(wait=True, cancel_futures=True)
             self.executor = None
+        atexit.unregister(self.stop)

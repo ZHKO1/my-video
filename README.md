@@ -268,6 +268,11 @@ uv run my-video synthesize ~/work/my-video/<VideoTitle>
 <workspace>/
   info.json
   status.json
+  cache/
+    llm/
+    translate/
+  log/
+    llm.log
   origin/
     video.<ext>
     subtitle.srt
@@ -296,6 +301,32 @@ uv run my-video synthesize ~/work/my-video/<VideoTitle>
 - `origin.subtitle_path`
 - `origin.thumbnail_path`
 - `last_time`
+
+### 缓存与日志
+
+字幕命令会在对应视频 workspace 内初始化缓存和 LLM 请求日志。`cache/llm/` 保存 LLM 原始响应，`cache/translate/` 保存翻译结果；同一视频重跑可命中缓存，不同视频分别保存。`log/llm.log` 追加记录实际请求和响应，缓存命中不重复记录。旧 `work_dir` 下的全局缓存和日志不会自动迁移或删除。
+
+core 和 CLI 的普通运行日志统一使用标准 `logging`，CLI 入口配置格式并输出到 stderr。成功和操作提示使用 INFO，警告使用 WARNING，错误使用 ERROR；LLM 请求日志仍单独保存。独立调用 core 时，调用方需要先初始化资源，并在所有工作线程结束后清理：
+
+```python
+from my_video.core.llm.client import init_llm_log, reset_llm_log
+from my_video.core.utils.cache import close_cache, init_cache
+from my_video.core.workspace import build_workspace_paths
+
+paths = build_workspace_paths("/path/to/video-workspace")
+init_cache(paths.cache_dir)
+try:
+    init_llm_log(paths.llm_log_path)
+    try:
+        # 调用 core；使用处理器时通过 finally 调用其 stop() 等待线程退出。
+        pass
+    finally:
+        reset_llm_log()
+finally:
+    close_cache()
+```
+
+一个进程同时只支持一个活动 workspace，关闭后可以重新初始化另一个。导入模块不会自动创建缓存，未初始化即访问资源会报错。
 
 ## 开发
 

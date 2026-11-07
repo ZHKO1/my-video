@@ -2,36 +2,46 @@
 
 from __future__ import annotations
 
-import json
-import sys
-import traceback
+import logging
 from argparse import Namespace
+from contextlib import ExitStack
 from pathlib import Path
 
-from my_video.cli import EXIT, output
+from my_video.cli import EXIT
 from my_video.cli.config import get_toml_value
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
+
+logger = logging.getLogger(__name__)
 
 
 def run(args: Namespace, config: dict) -> int:
     workspace_path = Path(args.workspace_path).expanduser()
     if not workspace_path.is_dir():
-        output.error(f"Workspace not found: {workspace_path}")
+        logger.error(f"Workspace not found: {workspace_path}")
         return EXIT.FILE_NOT_FOUND
 
     paths = build_workspace_paths(workspace_path)
     if not paths.whisperx_json.exists():
-        output.error(f"whisperx.json not found: {paths.whisperx_json!s}")
+        logger.error(f"whisperx.json not found: {paths.whisperx_json!s}")
         return EXIT.FILE_NOT_FOUND
 
     from my_video.core.asr.asr_data import SubtitleSegments
+    from my_video.core.llm.client import init_llm_log, reset_llm_log
     from my_video.core.optimize.optimize import SubtitleOptimizer
     from my_video.core.split.split import SubtitleSplitter
     from my_video.core.translate.factory import TranslatorFactory
+    from my_video.core.utils.cache import close_cache, init_cache
     from my_video.core.utils.text_utils import is_mainly_cjk
 
+    processors = []
+    cache_initialized = False
+    log_initialized = False
     try:
+        init_cache(paths.cache_dir)
+        cache_initialized = True
+        init_llm_log(paths.llm_log_path)
+        log_initialized = True
         asr_data = SubtitleSegments.from_whisperx_json(str(paths.whisperx_json))
         reference_data = _load_origin_subtitle_data(paths)
 
@@ -54,6 +64,7 @@ def run(args: Namespace, config: dict) -> int:
             model=llm_model,
             custom_prompt="",
         )
+        processors.append(optimizer)
         new_sentence_data = optimizer.optimize_subtitle(
             sentence_data,
             reference_data=reference_data,
@@ -70,6 +81,7 @@ def run(args: Namespace, config: dict) -> int:
             custom_prompt="",
             max_word_count=max_word_count,
         )
+        processors.append(splitter)
         subtitle_lines = splitter.split_subtitle(sentence_data.sentences)
         subtitle_lines.to_txt(paths.split_txt)
 
@@ -85,18 +97,26 @@ def run(args: Namespace, config: dict) -> int:
             custom_prompt="",
             is_reflect=need_reflect,
         )
+        processors.append(translator)
         translated_lines = translator.translate_subtitle(subtitle_lines)
 
         translated_lines.to_srt(paths.src_srt, is_translation=False)
         translated_lines.to_srt(paths.trans_srt, is_translation=True)
 
-        output.success(f"Subtitle files saved to {paths.src_srt} and {paths.trans_srt}")
+        logger.info(f"Subtitle files saved to {paths.src_srt} and {paths.trans_srt}")
         return EXIT.SUCCESS
 
     except Exception as e:
-        output.error(e)
-        output.error(traceback.format_exc())
+        logger.exception("Command failed: %s", e)
         return EXIT.RUNTIME_ERROR
+    finally:
+        with ExitStack() as cleanup:
+            if log_initialized:
+                cleanup.callback(reset_llm_log)
+            if cache_initialized:
+                cleanup.callback(close_cache)
+            for processor in processors:
+                cleanup.callback(processor.stop)
 
 
 def _load_origin_subtitle_data(paths):
@@ -109,4 +129,3 @@ def _load_origin_subtitle_data(paths):
     from my_video.core.asr.asr_data import SubtitleSegments
 
     return SubtitleSegments.from_subtitle_file(str(subtitle_path))
-

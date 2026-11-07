@@ -16,7 +16,7 @@ dependencies = [
     "torch>=2.8.0",
     "whisperx>=3.8.5",
     "demucs[dev] @ git+https://github.com/adefossez/demucs",
-    "yt-dlp[default]>=2025.7.21",
+    "yt-dlp[default]>=2026.10.26",
 ]
 
 [project.scripts]
@@ -49,8 +49,9 @@ url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
 
 [tool.uv]
+environments = ["sys_platform == 'linux'"]
 override-dependencies = [
-    "torchaudio>=2.8.0",  # 强制覆盖 demucs 的 torchaudio<2.2
+    "torchaudio~=2.8.0",  # 强制覆盖 demucs 的 torchaudio<2.2
 ]
 
 # ==================== Ruff 配置 ====================

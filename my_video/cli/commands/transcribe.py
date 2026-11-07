@@ -1,10 +1,10 @@
 """transcribe command — convert audio/video to subtitles via ASR."""
 
-import traceback
+import logging
 from argparse import Namespace
 from pathlib import Path
 
-from my_video.cli import EXIT, output
+from my_video.cli import EXIT
 from my_video.cli.config import get_toml_str, get_toml_value
 from my_video.core.asr.audio_preprocess import (
     convert_video_to_audio,
@@ -19,31 +19,33 @@ from my_video.core.asr.whisperx_local import whisperx_audio
 from my_video.core.utils.helper import read_json
 from my_video.core.workspace import build_workspace_paths
 
+logger = logging.getLogger(__name__)
+
 
 def run(args: Namespace, config: dict) -> int:
     workspace_path = Path(args.workspace_path).expanduser()
     if not workspace_path.is_dir():
-        output.error(f"Workspace not found: {workspace_path}")
+        logger.error(f"Workspace not found: {workspace_path}")
         return EXIT.FILE_NOT_FOUND
 
     status_path = workspace_path / "status.json"
     status = read_json(status_path)
     if status is None:
-        output.error(f"status.json not found: {status_path}")
+        logger.error(f"status.json not found: {status_path}")
         return EXIT.FILE_NOT_FOUND
 
     origin = status.get("origin")
     video_path = origin.get("video_path") if isinstance(origin, dict) else None
     if not video_path:
-        output.error(f"origin.video_path missing in status.json: {status_path}")
+        logger.error(f"origin.video_path missing in status.json: {status_path}")
         return EXIT.RUNTIME_ERROR
     if not Path(video_path).exists():
-        output.error(f"Video file not found: {video_path}")
+        logger.error(f"Video file not found: {video_path}")
         return EXIT.FILE_NOT_FOUND
 
     paths = build_workspace_paths(workspace_path)
     if paths.whisperx_json.exists():
-        output.success(f"{paths.whisperx_json!s} is existed")
+        logger.info(f"{paths.whisperx_json!s} is existed")
         return EXIT.SUCCESS
 
     try:
@@ -71,7 +73,7 @@ def run(args: Namespace, config: dict) -> int:
 
         hallucination_result = scan_whisperx_hallucinations(paths.whisperx_json)
         if hallucination_result.has_hallucination:
-            output.warn(
+            logger.warning(
                 format_hallucination_report(hallucination_result, max_examples=5)
             )
             # raise RuntimeError(f"WhisperX hallucination detected in {paths.whisperx_json}")
@@ -81,6 +83,5 @@ def run(args: Namespace, config: dict) -> int:
         return EXIT.SUCCESS
 
     except Exception as e:
-        output.error(e)
-        output.error(traceback.format_exc())
+        logger.exception("Command failed: %s", e)
         return EXIT.RUNTIME_ERROR

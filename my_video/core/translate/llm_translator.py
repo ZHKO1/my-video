@@ -1,11 +1,11 @@
 """LLM 翻译器（使用 OpenAI）"""
 
 import json
+import logging
 from typing import Any
 
 import openai
 
-from my_video.cli import output
 from my_video.core.asr.asr_data import SubtitleLine
 from my_video.core.llm import (
     call_llm,
@@ -17,6 +17,8 @@ from my_video.core.prompts import get_prompt
 from my_video.core.translate.base import BaseTranslator
 from my_video.core.translate.types import TargetLanguage
 from my_video.core.utils.cache import generate_cache_key
+
+logger = logging.getLogger(__name__)
 
 
 class LLMTranslator(BaseTranslator):
@@ -49,7 +51,7 @@ class LLMTranslator(BaseTranslator):
     def _translate_chunk(
         self, subtitle_chunk: list[SubtitleLine]
     ) -> list[SubtitleLine]:
-        output.info(
+        logger.info(
             f"[+]translatting subtitles: {subtitle_chunk[0].sentence_index} - {subtitle_chunk[-1].sentence_index}"
         )
 
@@ -65,16 +67,16 @@ class LLMTranslator(BaseTranslator):
                 )
             return subtitle_chunk
         except openai.RateLimitError as e:
-            output.error(f"OpenAI Rate Limit Error: {e!s}")
+            logger.error(f"OpenAI Rate Limit Error: {e!s}")
             raise
         except openai.AuthenticationError as e:
-            output.error(f"OpenAI Authentication Error: {e!s}")
+            logger.error(f"OpenAI Authentication Error: {e!s}")
             raise
         except openai.NotFoundError as e:
-            output.error(f"OpenAI NotFound Error: {e!s}")
+            logger.error(f"OpenAI NotFound Error: {e!s}")
             raise
         except Exception as e:
-            output.error(f"LLM translation error: {e}")
+            logger.error(f"LLM translation error: {e}")
             raise
 
     def _normalize_result(self, result_dict: dict[str, Any]) -> dict[str, str]:
@@ -111,7 +113,7 @@ class LLMTranslator(BaseTranslator):
                     if is_valid:
                         return response_dict
 
-            output.warn(
+            logger.warning(
                 f"翻译验证失败[{response_id}]，开始反馈循环 (第{step + 1}次尝试): {error_message}"
             )
             messages.append(
@@ -130,7 +132,7 @@ class LLMTranslator(BaseTranslator):
                 }
             )
 
-        output.warn(f"Max attempts reached({self.MAX_STEPS})，returning last result")
+        logger.warning(f"Max attempts reached({self.MAX_STEPS})，returning last result")
         return last_response_dict or subtitle_dict
 
     def _validate_llm_response(

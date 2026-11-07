@@ -6,7 +6,6 @@ from my_video.core.asr.asr_data import (
 )
 from my_video.core.optimize.optimize import MAX_STEPS, SubtitleOptimizer
 from tests.helpers.agent_loop import (
-    install_warnings,
     make_response,
     make_response_without_message,
     sequence_call_llm,
@@ -160,7 +159,9 @@ class TestValidate:
             {
                 "0": "this is a longer sentence that should keep most of the original wording for subtitle optimization validation"
             },
-            {"0": "completely rewritten content with a very different meaning and structure"},
+            {
+                "0": "completely rewritten content with a very different meaning and structure"
+            },
         )
 
         assert not is_valid
@@ -169,7 +170,7 @@ class TestValidate:
 
 
 class TestAgentLoop:
-    def test_reference(self, monkeypatch) -> None:
+    def test_reference(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
         captured: dict[str, object] = {}
 
@@ -190,11 +191,8 @@ class TestAgentLoop:
         )
         optimizer.stop()
 
-    def test_empty(self, monkeypatch) -> None:
+    def test_empty(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -208,15 +206,12 @@ class TestAgentLoop:
         result = optimizer.agent_loop({"0": "hello world"}, "")
 
         assert result == {"0": "hello world"}
-        assert "优化验证失败[opt-empty]" in warnings[0]
-        assert "Response content is empty." in warnings[0]
+        assert "优化验证失败[opt-empty]" in caplog.messages[0]
+        assert "Response content is empty." in caplog.messages[0]
         optimizer.stop()
 
-    def test_not_dict(self, monkeypatch) -> None:
+    def test_not_dict(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -230,14 +225,11 @@ class TestAgentLoop:
         result = optimizer.agent_loop({"0": "hello world"}, "")
 
         assert result == {"0": "hello world"}
-        assert "JSON structure error: expected dict, got list." in warnings[0]
+        assert "JSON structure error: expected dict, got list." in caplog.messages[0]
         optimizer.stop()
 
-    def test_keys_missing(self, monkeypatch) -> None:
+    def test_keys_missing(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -251,14 +243,11 @@ class TestAgentLoop:
         result = optimizer.agent_loop({"0": "hello", "1": "world"}, "")
 
         assert result == {"0": "hello", "1": "world"}
-        assert "Missing keys: ['1']" in warnings[0]
+        assert "Missing keys: ['1']" in caplog.messages[0]
         optimizer.stop()
 
-    def test_keys_extra(self, monkeypatch) -> None:
+    def test_keys_extra(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -272,14 +261,11 @@ class TestAgentLoop:
         result = optimizer.agent_loop({"0": "hello"}, "")
 
         assert result == {"0": "hello"}
-        assert "Extra keys: ['1']" in warnings[0]
+        assert "Extra keys: ['1']" in caplog.messages[0]
         optimizer.stop()
 
-    def test_warn(self, monkeypatch) -> None:
+    def test_warn(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -295,15 +281,12 @@ class TestAgentLoop:
         assert result == {"0": "hello world"}
         assert (
             "优化验证失败[opt-resp-1]，开始反馈循环 (第1次尝试): Key '0': similarity"
-            in warnings[0]
+            in caplog.messages[0]
         )
         optimizer.stop()
 
-    def test_max_steps(self, monkeypatch) -> None:
+    def test_max_steps(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -317,14 +300,14 @@ class TestAgentLoop:
         result = optimizer.agent_loop({"0": "hello world"}, "")
 
         assert result == {"0": "changed too much"}
-        assert warnings[-1] == f"Max attempts reached({MAX_STEPS})，returning last result"
+        assert (
+            caplog.messages[-1]
+            == f"Max attempts reached({MAX_STEPS})，returning last result"
+        )
         optimizer.stop()
 
-    def test_response_shape(self, monkeypatch) -> None:
+    def test_response_shape(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 20, "test-model", "")
-        warnings = install_warnings(
-            monkeypatch, "my_video.core.optimize.optimize.output.warn"
-        )
         monkeypatch.setattr(
             "my_video.core.optimize.optimize.call_llm",
             sequence_call_llm(
@@ -339,15 +322,18 @@ class TestAgentLoop:
         result = optimizer.agent_loop({"0": "hello world"}, "")
 
         assert result == {"0": "hello world"}
-        assert "choices is empty" in warnings[0]
-        assert "message is missing" in warnings[1]
-        assert "content is missing" in warnings[2]
-        assert warnings[-1] == f"Max attempts reached({MAX_STEPS})，returning last result"
+        assert "choices is empty" in caplog.messages[0]
+        assert "message is missing" in caplog.messages[1]
+        assert "content is missing" in caplog.messages[2]
+        assert (
+            caplog.messages[-1]
+            == f"Max attempts reached({MAX_STEPS})，returning last result"
+        )
         optimizer.stop()
 
 
 class TestFlow:
-    def test_write_back(self, monkeypatch) -> None:
+    def test_write_back(self, monkeypatch, caplog) -> None:
         optimizer = SubtitleOptimizer(1, 2, "test-model", "")
         sentence_data = SubtitleSentences(
             [

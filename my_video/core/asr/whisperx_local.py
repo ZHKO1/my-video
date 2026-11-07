@@ -1,5 +1,6 @@
 import functools
 import json
+import logging
 import os
 import subprocess
 import time
@@ -13,8 +14,9 @@ from whisperx.audio import (
     load_audio as whisperx_load_audio,
 )
 
-from my_video.cli import output
 from my_video.core.utils.decorator import skip_fun_if_file_exist
+
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore")
 
@@ -40,7 +42,7 @@ def check_hf_mirror() -> str | None:
     fastest_url = f"https://{mirrors['Official']}"
     best_time = float("inf")
 
-    output.info("Checking HuggingFace mirrors")
+    logger.info("Checking HuggingFace mirrors")
     for name, domain in mirrors.items():
         if os.name == "nt":
             cmd = ["ping", "-n", "1", "-w", "3000", domain]
@@ -51,7 +53,7 @@ def check_hf_mirror() -> str | None:
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         except OSError:
-            output.warn("ping is not available, using default HuggingFace endpoint")
+            logger.warning("ping is not available, using default HuggingFace endpoint")
             return None
 
         response_time = time.time() - start
@@ -59,13 +61,13 @@ def check_hf_mirror() -> str | None:
             if response_time < best_time:
                 best_time = response_time
                 fastest_url = f"https://{domain}"
-            output.info(f"{name} mirror responded in {response_time:.2f}s")
+            logger.info(f"{name} mirror responded in {response_time:.2f}s")
 
     if best_time == float("inf"):
-        output.warn("All HuggingFace mirrors failed, using default endpoint")
+        logger.warning("All HuggingFace mirrors failed, using default endpoint")
         return None
 
-    output.info(f"Selected HuggingFace endpoint: {fastest_url}")
+    logger.info(f"Selected HuggingFace endpoint: {fastest_url}")
     return fastest_url
 
 
@@ -86,13 +88,13 @@ def whisperx_audio(
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         batch_size = 16 if gpu_mem > 8 else 2
         compute_type = "float16" if torch.cuda.is_bf16_supported() else "int8"
-        output.info(
+        logger.info(
             f"Using WhisperX on {device} (GPU memory={gpu_mem:.2f}GB, batch_size={batch_size}, compute_type={compute_type})"
         )
     else:
         batch_size = 1
         compute_type = "int8"
-        output.info(
+        logger.info(
             f"Using WhisperX on {device} (batch_size={batch_size}, compute_type={compute_type})"
         )
 
@@ -103,7 +105,7 @@ def whisperx_audio(
             model_ref = str(candidate)
 
     language = None if whisper_language == "auto" else whisper_language
-    output.info("Starting WhisperX")
+    logger.info("Starting WhisperX")
     model = whisperx.load_model(
         model_ref,
         device,
